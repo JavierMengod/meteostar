@@ -5,28 +5,34 @@ import { CabeceraSeccion } from "../componentes/Piezas";
 const Rio = lazy(() => import("../componentes/Rio"));
 
 /** Aforos de río por cuenca. Sus datos en tiempo real solo se publican en la web del SAIH, así que se enlazan. */
-const AFOROS: Record<string, { nombre: string; detalle: string; url: string; fuente: string }[]> = {
-  Júcar: [
-    {
-      nombre: "Caudal medido en Teruel",
-      detalle: "El dato real, cada pocos minutos: aforo del Turia en Teruel (08015), el más cercano a Villastar aguas arriba, y del Alfambra en Teruel (08027).",
-      url: "https://saih.chj.es/",
-      fuente: "SAIH Júcar",
-    },
-  ],
-};
+/** Páginas donde se ve el caudal medido del Turia en Teruel (no hay acceso abierto para mostrarlo aquí). */
+const ENLACES_AFORO: [string, string, string][] = [
+  ["Turia en Teruel, nivel y caudal", "lluviasypantanos.es", "https://lluviasypantanos.es/rio/turia-teruel"],
+  ["Mapa oficial de aforos en directo", "Observatorio del Agua (MITECO)", "https://observatorioagua.miteco.es/hidrologia/"],
+  ["Web de la confederación", "SAIH Júcar", "https://saih.chj.es/"],
+];
 
-function Aforo({ a }: { a: (typeof AFOROS)[string][number] }) {
+function Aforo() {
   return (
-    <a href={a.url} target="_blank" rel="noreferrer" className="tarjeta tarjeta-aforo enlace">
-      <small className="mono">{a.fuente.toUpperCase()} · EN TIEMPO REAL</small>
-      <h3>{a.nombre}</h3>
-      <p className="suave pequeno">{a.detalle}</p>
-      <span className="ver-grafica">Consultar en la web del {a.fuente} ↗</span>
-    </a>
+    <section className="tarjeta tarjeta-aforo">
+      <small className="mono">CAUDAL MEDIDO · EN TIEMPO REAL</small>
+      <h3>Turia en Teruel</h3>
+      <p className="suave pequeno">
+        El dato real del aforo de la confederación (08015), el más cercano a Villastar aguas arriba. Se puede consultar en:
+      </p>
+      <ul className="enlaces-aforo">
+        {ENLACES_AFORO.map(([texto, sitio, url]) => (
+          <li key={url}>
+            <a href={url} target="_blank" rel="noreferrer">
+              {texto} ↗
+            </a>
+            <small className="suave">{sitio}</small>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
-
 
 export default function Rios() {
   return (
@@ -41,9 +47,7 @@ export default function Rios() {
         <Suspense fallback={<div className="tarjeta rio" style={{ minHeight: 320 }} />}>
           <Rio />
         </Suspense>
-        {AFOROS.Júcar.map((a) => (
-          <Aforo key={a.nombre} a={a} />
-        ))}
+        <Aforo />
       </div>
     </>
   );

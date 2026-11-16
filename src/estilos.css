@@ -3445,3 +3445,22 @@ h3 {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.enlaces-aforo {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.enlaces-aforo li {
+  display: grid;
+  gap: 1px;
+}
+.enlaces-aforo a {
+  color: var(--acento-texto);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.enlaces-aforo small {
+  font-size: 0.75rem;
+}
