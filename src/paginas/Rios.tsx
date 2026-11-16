@@ -4,6 +4,7 @@ import { CabeceraSeccion } from "../componentes/Piezas";
 
 const Rio = lazy(() => import("../componentes/Rio"));
 const Aforos = lazy(() => import("../componentes/Aforos"));
+const HistoricoAforo = lazy(() => import("../componentes/HistoricoAforo"));
 
 /** Aforos de río por cuenca. Sus datos en tiempo real solo se publican en la web del SAIH, así que se enlazan. */
 /** Otras webs donde consultar el aforo. */
@@ -50,6 +51,11 @@ export default function Rios() {
         </Suspense>
         <Aforo />
       </div>
+
+      <CabeceraSeccion titulo="Histórico del Turia en Teruel" nota="Cada año comparado con lo normal y con otros años" />
+      <Suspense fallback={<div className="tarjeta" style={{ minHeight: 400 }} />}>
+        <HistoricoAforo estacion="turia-teruel" />
+      </Suspense>
 
       <CabeceraSeccion titulo="Previsión" nota="Tendencia a 15 días según el modelo de Copernicus" />
       <Suspense fallback={<div className="tarjeta rio" style={{ minHeight: 320 }} />}>

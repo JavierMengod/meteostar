@@ -5,6 +5,7 @@ import publica from "./api/publica";
 import { leerEstaciones } from "./cron";
 import { borrarAntiguas } from "./db";
 import { actualizarAforos } from "./aforos";
+import { actualizarHistorico } from "./historico-aforos";
 import { archivarRadar } from "./radar";
 import { actualizarSatelite } from "./seguimiento";
 
@@ -31,6 +32,9 @@ export default {
     if (controller.cron === "8-59/10 * * * *") {
       ctx.waitUntil(archivarRadar(env).catch((e) => console.error("radar", e)));
       ctx.waitUntil(actualizarAforos(env).catch((e) => console.error("aforos", e)));
+      // Una vez al día (03:08 UTC): medias diarias de los aforos y resumen del histórico
+      const d = new Date(controller.scheduledTime);
+      if (d.getUTCHours() === 3 && d.getUTCMinutes() < 10) ctx.waitUntil(actualizarHistorico(env).catch((e) => console.error("histórico aforos", e)));
       return;
     }
     // Cada minuto: estaciones que se leen por API

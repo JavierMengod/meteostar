@@ -421,3 +421,43 @@ export interface Aforo {
 export interface RespuestaAforos {
   aforos: Aforo[];
 }
+
+// ===== Histórico de aforos (Anuario de Aforos + medias de las lecturas) =====
+
+export interface AnioAforo {
+  /** Año hidrológico: 2021 = de octubre de 2021 a septiembre de 2022 */
+  anio: number;
+  media: number;
+  /** Agua que ha pasado en el año (hm³) */
+  volumen: number;
+  maximo: number;
+  fechaMaximo: string;
+  dias: number;
+}
+
+export interface CrecidaAforo {
+  fecha: string;
+  caudal: number;
+}
+
+export interface ResumenAforo {
+  estacion: string;
+  /** Percentiles 10, 25, 50, 75 y 90 del caudal diario para cada día del año hidrológico (0 = 1 de octubre) */
+  normal: ([number, number, number, number, number] | null)[];
+  /** Caudal medio de cada mes (enero = 0) en el periodo normal */
+  mesesNormal: (number | null)[];
+  periodoNormal: string;
+  /** Años hidrológicos completos */
+  anios: AnioAforo[];
+  /** Años hidrológicos con algún dato (para elegir en la gráfica) */
+  disponibles: number[];
+  /** Mayores caudales medios diarios (episodios distintos) */
+  crecidas: CrecidaAforo[];
+  /** Mayores caudales instantáneos */
+  puntas: CrecidaAforo[];
+  desde: string | null;
+  hasta: string | null;
+}
+
+/** [fecha, caudal medio, origen: a = anuario, m = medido en tiempo real] */
+export type DiaAforo = [string, number | null, "a" | "m"];

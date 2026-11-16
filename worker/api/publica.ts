@@ -23,6 +23,7 @@ import { detalleEmbalse, estadoEmbalses } from "../embalses";
 import { obtenerPrevision } from "../prevision";
 import { estadoRio } from "../rio";
 import { estadoAforos } from "../aforos";
+import { anioAforo, resumenAforo } from "../historico-aforos";
 import { radar, teselaRadar } from "../radar";
 import { CAPAS_SATELITE, imagenSatelite, PASOS, satelite, type CapaSatelite } from "../seguimiento";
 
@@ -205,6 +206,20 @@ app.get("/aforos", async (c) => {
     console.error(e);
     return c.json({ error: "aforos no disponibles" }, 502);
   }
+});
+
+app.get("/aforos/:id/historico", async (c) => {
+  const r = await resumenAforo(c.env, c.req.param("id"));
+  if (!r) return c.json({ error: "aforo no encontrado" }, 404);
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.json(r);
+});
+
+app.get("/aforos/:id/anio/:anio", async (c) => {
+  const anio = Number(c.req.param("anio"));
+  if (!Number.isInteger(anio) || anio < 1900 || anio > 2100) return c.json({ error: "año no válido" }, 400);
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.json(await anioAforo(c.env, c.req.param("id"), anio));
 });
 
 app.get("/rio", async (c) => {

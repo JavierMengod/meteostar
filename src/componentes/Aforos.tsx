@@ -11,7 +11,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { Aforo, RespuestaAforos } from "../../shared/tipos";
+import { comparaNormal, diaHidrologico } from "../../shared/hidrologia";
+import type { Aforo, RespuestaAforos, ResumenAforo } from "../../shared/tipos";
 import { usePeticion } from "../datos";
 import { diaHora, hace, hora, n } from "../formato";
 
@@ -202,6 +203,7 @@ export default function Aforos() {
     5 * 60_000,
   );
   const [horas, setHoras] = useState(24 * 7);
+  const { datos: resumen } = usePeticion<ResumenAforo>("/api/aforos/turia-teruel/historico", 6 * 3600_000);
   if (!datos)
     return error ? (
       <p className="vacio">El caudal medido no está disponible ahora mismo.</p>
@@ -213,6 +215,10 @@ export default function Aforos() {
   if (!turia) return null;
   const u = turia.ultimo;
   const sit = situacion(u?.caudal ?? null, turia.umbrales);
+  // Frente a lo habitual para la fecha (percentiles del Anuario de Aforos)
+  const hoy = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" });
+  const normalHoy = resumen?.normal[diaHidrologico(hoy)] ?? null;
+  const frente = u?.caudal != null && normalHoy ? comparaNormal(u.caudal, normalHoy) : null;
   return (
     <section className="tarjeta rio">
       <div className="rio-resumen">
@@ -223,6 +229,12 @@ export default function Aforos() {
             <sup>m³/s</sup>
           </p>
           <Tendencia v={turia.tendencia} />
+          {frente && normalHoy && (
+            <p className="frente-normal">
+              <span className={`variacion ${frente.clase}`}>{frente.texto}</span>{" "}
+              <span className="suave pequeno">(lo habitual estos días: {n(normalHoy[2], 2)} m³/s)</span>
+            </p>
+          )}
           <p className="suave pequeno">
             {u?.nivel !== null &&
               u?.nivel !== undefined &&

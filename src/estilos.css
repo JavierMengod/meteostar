@@ -3515,3 +3515,79 @@ h3 {
 .aviso-corto {
   margin: 0;
 }
+
+/* --- Histórico de aforos --- */
+.historico-aforo {
+  display: grid;
+  gap: 14px;
+}
+.historico-aforo .tarjeta p {
+  margin: 6px 0 0;
+}
+.cabecera-historico {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin-bottom: 8px;
+}
+.cabecera-historico h3 {
+  margin: 0 !important;
+}
+.selectores-anio {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.selector-anio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.selector-anio i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.selector-anio select {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--texto);
+}
+.rejilla-records {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 28px;
+}
+.records-aforo h3 {
+  margin: 0 0 6px !important;
+}
+.records-aforo ol {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 3px;
+  font-size: 0.9rem;
+}
+.records-aforo li span {
+  display: inline-block;
+  min-width: 9.5em;
+}
+.frente-normal {
+  margin: 2px 0 0;
+}
+@media (max-width: 700px) {
+  .rejilla-records {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Las rejillas de una columna no deben crecer con el ancho mínimo de las gráficas */
+.historico-aforo,
+.rio {
+  grid-template-columns: minmax(0, 1fr);
+}
