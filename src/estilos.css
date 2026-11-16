@@ -1,91 +1,101 @@
-/* ===== Tokens ===== */
+/* ===== Tokens =====
+   Identidad de Meteostar: cuaderno de observación. Papel, tinta azul noche y dorado de estrella. */
 :root {
-  --fondo: #eef1f4;
-  --superficie: #ffffff;
-  --superficie-2: #f5f7f9;
-  --borde: #dfe4ea;
-  --rejilla: #ebeef2;
-  --texto: #18212b;
-  --texto-suave: #66727f;
-  --acento: #0e7c6b;
-  --acento-suave: #d8efe9;
-  --acento-texto: #0b5f52;
-  --calor: #d4502c;
-  --frio: #2f6fd0;
-  --c-temp: #e0592f;
-  --c-rocio: #3f9a63;
-  --c-hum: #2b82d9;
-  --c-viento: #128272;
-  --c-racha: #5b6474;
-  --c-lluvia: #2864c7;
-  --c-intensidad: #6f9ff0;
-  --c-presion: #0e7c6b;
-  --c-sol: #e2a017;
+  --fondo: #f3efe6;
+  --superficie: #fbf9f4;
+  --superficie-2: #f2ede2;
+  --borde: #ddd5c4;
+  --rejilla: #e8e1d2;
+  --texto: #1c1b2e;
+  --texto-suave: #6e6a80;
+  --acento: #2b358a;
+  --acento-suave: #e3e4f3;
+  --acento-texto: #2b358a;
+  --estrella: #d99a25;
+  --tinta: #151a3d;
+  --sobre-acento: #ffffff;
+  --calor: #c24a28;
+  --frio: #2c5fb8;
+  --c-temp: #c94f2a;
+  --c-rocio: #3d8a5a;
+  --c-hum: #2c6fc0;
+  --c-viento: #5b4fb3;
+  --c-racha: #8a8798;
+  --c-lluvia: #2a5fc4;
+  --c-intensidad: #7299e6;
+  --c-presion: #b07612;
+  --c-sol: #d99a25;
   --c-uv: #8b49c9;
-  --v1: #cfe3f5;
-  --v2: #8ec3ec;
-  --v3: #3f93d8;
-  --v4: #2f9e74;
-  --v5: #e2a017;
-  --v6: #d4502c;
-  --sombra: 0 1px 2px rgb(16 24 40 / 0.05);
-  --radio: 14px;
-  --f-texto: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --f-titulo: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
-  --f-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", monospace;
+  --v1: #d9e1f2;
+  --v2: #9fb4e2;
+  --v3: #4f74c9;
+  --v4: #3d8a5a;
+  --v5: #d99a25;
+  --v6: #c24a28;
+  --sombra: none;
+  --radio: 6px;
+  --f-texto: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-titulo: "Fraunces Variable", Georgia, "Times New Roman", serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --fondo: #0d1218;
-    --superficie: #151c24;
-    --superficie-2: #1b232d;
-    --borde: #27313d;
-    --rejilla: #202934;
-    --texto: #e6ebf0;
-    --texto-suave: #93a0ad;
-    --acento: #35b9a2;
-    --acento-suave: #173a35;
-    --acento-texto: #6fd8c4;
-    --calor: #ff7f5c;
-    --frio: #6aa6ff;
-    --c-temp: #ff7f5c;
-    --c-rocio: #63c48a;
-    --c-hum: #5aa8f0;
-    --c-viento: #35b9a2;
-    --c-racha: #8c96a6;
-    --c-lluvia: #5f95f0;
-    --c-intensidad: #7fa9f5;
-    --c-presion: #35b9a2;
-    --v1: #2b3f55;
-    --v2: #3a6a96;
+    --fondo: #0c0e1c;
+    --superficie: #141730;
+    --superficie-2: #1b1f3d;
+    --borde: #2a2f55;
+    --rejilla: #20254a;
+    --texto: #ecebf4;
+    --texto-suave: #9c9dbf;
+    --acento: #f0b34a;
+    --acento-suave: #3a2f1c;
+    --acento-texto: #f6c870;
+    --estrella: #f6c870;
+    --tinta: #080a18;
+    --sobre-acento: #151a3d;
+    --calor: #ff8a6a;
+    --frio: #7fb0ff;
+    --c-temp: #ff8a6a;
+    --c-rocio: #7ccf9a;
+    --c-hum: #7fb0ff;
+    --c-viento: #b9a6ff;
+    --c-racha: #8d90b3;
+    --c-lluvia: #6fa3ff;
+    --c-intensidad: #93b9ff;
+    --c-presion: #f0b34a;
+    --v1: #2c3260;
+    --v2: #4a5598;
     color-scheme: dark;
   }
 }
 :root[data-modo="oscuro"] {
-  --fondo: #0d1218;
-  --superficie: #151c24;
-  --superficie-2: #1b232d;
-  --borde: #27313d;
-  --rejilla: #202934;
-  --texto: #e6ebf0;
-  --texto-suave: #93a0ad;
-  --acento: #35b9a2;
-  --acento-suave: #173a35;
-  --acento-texto: #6fd8c4;
-  --calor: #ff7f5c;
-  --frio: #6aa6ff;
-  --c-temp: #ff7f5c;
-  --c-rocio: #63c48a;
-  --c-hum: #5aa8f0;
-  --c-viento: #35b9a2;
-  --c-racha: #8c96a6;
-  --c-lluvia: #5f95f0;
-  --c-intensidad: #7fa9f5;
-  --c-presion: #35b9a2;
-  --v1: #2b3f55;
-  --v2: #3a6a96;
+  --fondo: #0c0e1c;
+  --superficie: #141730;
+  --superficie-2: #1b1f3d;
+  --borde: #2a2f55;
+  --rejilla: #20254a;
+  --texto: #ecebf4;
+  --texto-suave: #9c9dbf;
+  --acento: #f0b34a;
+  --acento-suave: #3a2f1c;
+  --acento-texto: #f6c870;
+  --estrella: #f6c870;
+  --tinta: #080a18;
+  --sobre-acento: #151a3d;
+  --calor: #ff8a6a;
+  --frio: #7fb0ff;
+  --c-temp: #ff8a6a;
+  --c-rocio: #7ccf9a;
+  --c-hum: #7fb0ff;
+  --c-viento: #b9a6ff;
+  --c-racha: #8d90b3;
+  --c-lluvia: #6fa3ff;
+  --c-intensidad: #93b9ff;
+  --c-presion: #f0b34a;
+  --v1: #2c3260;
+  --v2: #4a5598;
   color-scheme: dark;
 }
 
@@ -2892,4 +2902,388 @@ h3 {
   padding: 5px 12px;
   background: var(--superficie);
   color: var(--texto);
+}
+
+/* =====================================================================
+   REDISEÑO · identidad propia de Meteostar
+   Cuaderno de observación: papel cuadriculado, tinta azul noche, dorado
+   de estrella, serif con carácter para títulos y cifras, líneas finas.
+   ===================================================================== */
+
+body {
+  background-color: var(--fondo);
+  background-image: radial-gradient(color-mix(in srgb, var(--texto) 9%, transparent) 1px, transparent 1.2px);
+  background-size: 24px 24px;
+  font-size: 15px;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--f-titulo);
+  font-variation-settings: "SOFT" 50, "WONK" 0;
+  letter-spacing: -0.01em;
+}
+
+/* --- Cabecera: barra de tinta con la estrella --- */
+.cabecera {
+  background: var(--tinta);
+  border-bottom: 2px solid var(--estrella);
+  backdrop-filter: none;
+}
+.marca {
+  color: #fff;
+  font-family: var(--f-titulo);
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+.marca b {
+  color: var(--estrella);
+  font-weight: 600;
+}
+.logo rect {
+  fill: var(--estrella);
+}
+.logo .logo-estrella {
+  fill: var(--tinta);
+}
+.nav-item {
+  color: rgb(255 255 255 / 0.72);
+  border-radius: 0;
+  padding: 8px 12px;
+}
+.nav-item:hover {
+  color: #fff;
+  background: transparent;
+}
+.nav-item.activo {
+  background: transparent;
+  color: #fff;
+  box-shadow: inset 0 -2px 0 var(--estrella);
+}
+.submenu {
+  border-radius: var(--radio);
+  top: calc(100% + 10px);
+}
+.submenu a,
+.submenu button {
+  border-radius: 4px;
+}
+.submenu a.accion b {
+  color: var(--estrella);
+}
+.boton-usuario {
+  background: transparent;
+  border-color: rgb(255 255 255 / 0.25);
+  color: #fff;
+  border-radius: 4px;
+}
+.avatar {
+  background: var(--estrella);
+  color: var(--tinta);
+  border-radius: 4px;
+}
+.boton-entrar {
+  background: var(--estrella);
+  border-color: var(--estrella);
+  color: var(--tinta);
+  border-radius: 4px;
+}
+.hamburguesa {
+  background: transparent;
+  border-color: rgb(255 255 255 / 0.25);
+  border-radius: 4px;
+}
+.hamburguesa span {
+  background: #fff;
+}
+@media (max-width: 860px) {
+  .nav {
+    background: var(--tinta);
+    border-bottom: 2px solid var(--estrella);
+  }
+}
+
+/* --- Portada (hero): panel de lectura --- */
+.hero {
+  border-radius: var(--radio);
+}
+.hero h1 {
+  font-weight: 500;
+  font-style: italic;
+  font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 144;
+  letter-spacing: -0.02em;
+}
+.hero-sub {
+  font-family: var(--f-texto);
+}
+.hero-ante {
+  color: var(--estrella);
+}
+.franja {
+  border-radius: 4px;
+  border: 0;
+  border-top: 2px solid var(--estrella);
+  background: rgb(8 10 24 / 0.62);
+  padding: 10px 6px;
+}
+.franja > div {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0 18px;
+}
+.franja small {
+  color: var(--estrella);
+  font-size: 0.66rem;
+}
+.franja b {
+  font-weight: 400;
+  font-size: 1.7rem;
+  font-variation-settings: "opsz" 144;
+}
+
+/* --- Títulos de sección numerados --- */
+.contenido {
+  counter-reset: seccion;
+}
+.cabecera-seccion {
+  border-bottom: 1px solid var(--borde);
+  padding-bottom: 8px;
+  margin-top: 40px;
+}
+.cabecera-seccion h2 {
+  font-weight: 600;
+  font-size: 1.7rem;
+}
+.cabecera-seccion h2::before {
+  counter-increment: seccion;
+  content: counter(seccion, decimal-leading-zero);
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--estrella);
+  vertical-align: super;
+  margin-right: 10px;
+  letter-spacing: 0;
+}
+.cabecera-seccion p {
+  font-style: italic;
+}
+
+/* --- Tarjetas: papel con línea fina, sin sombras --- */
+.tarjeta {
+  border-radius: var(--radio);
+  box-shadow: none;
+  background: var(--superficie);
+}
+.tarjeta h3 {
+  font-family: var(--f-mono);
+  font-weight: 500;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+}
+.enlace:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--estrella);
+}
+.tarjeta-estacion h3,
+.tarjeta-info h3,
+.tarjeta-embalse h3,
+.acceso-cabecera h3,
+.fuente h3,
+.titulo-acento {
+  font-family: var(--f-titulo) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  color: var(--texto) !important;
+}
+.tarjeta-estacion h3,
+.tarjeta-info h3,
+.tarjeta-embalse h3,
+.fuente h3 {
+  font-size: 1.3rem !important;
+}
+.acceso-cabecera h3 {
+  font-size: 1.5rem !important;
+}
+.titulo-acento {
+  font-size: 1.45rem !important;
+}
+.titulo-acento {
+  border-bottom-color: var(--estrella) !important;
+}
+.tarjeta-estacion.oficial {
+  border-top: 3px double var(--estrella);
+}
+.insignia {
+  border-radius: 3px;
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
+/* --- Cifras: serif fina y elegante --- */
+.numero-grande,
+.numero-enorme,
+.numero-medio,
+.dia-temps,
+.resumen-dato b,
+.comparacion b,
+.reserva-total b,
+.casillas b,
+.acumulados b,
+.fila-extremo b,
+.hora-tarjeta b {
+  font-family: var(--f-titulo);
+  font-weight: 400;
+  font-variation-settings: "opsz" 144, "SOFT" 30;
+  letter-spacing: -0.02em;
+}
+.numero-grande sup,
+.numero-enorme sup,
+.numero-medio sup {
+  font-family: var(--f-mono);
+  font-size: 0.24em;
+  letter-spacing: 0;
+}
+.barra-minmax {
+  height: 5px;
+  border: 0;
+  border-radius: 0;
+  background: var(--rejilla);
+}
+.barra-rango {
+  border-radius: 0;
+}
+.barra-marca {
+  width: 4px;
+  height: 16px;
+  border: 0;
+  border-radius: 0;
+  background: var(--texto);
+}
+.tendencia {
+  border-radius: 3px;
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+}
+
+/* --- Pestañas subrayadas en vez de pastillas --- */
+.periodos {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--borde);
+  border-radius: 0;
+  padding: 0;
+  gap: 2px;
+}
+.periodos button {
+  border-radius: 0;
+  padding: 6px 12px;
+  font-family: var(--f-mono);
+  font-size: 0.8rem;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.periodos button[aria-selected="true"] {
+  background: transparent;
+  color: var(--texto);
+  font-weight: 500;
+  border-bottom-color: var(--estrella);
+}
+
+/* --- Botones y controles --- */
+.boton-principal,
+.boton-secundario,
+.boton-mini,
+.pastilla,
+.campo input,
+.campo select,
+.campo textarea,
+.selector-lugar select,
+.otra-fecha input,
+.consultar-barra input {
+  border-radius: 4px;
+}
+.boton-principal {
+  color: var(--sobre-acento);
+}
+.pastilla {
+  font-family: var(--f-mono);
+  font-size: 0.78rem;
+}
+.controles button {
+  border-radius: 4px;
+}
+.controles button:first-child {
+  color: var(--sobre-acento);
+}
+.controles input {
+  accent-color: var(--estrella);
+}
+.marcador-temp {
+  border-radius: 4px;
+  font-family: var(--f-titulo);
+  font-weight: 500;
+  color: var(--sobre-acento);
+}
+.marcador-nombre {
+  border-radius: 3px;
+}
+.acceso-icono {
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--borde);
+}
+.acceso-icono svg {
+  stroke: var(--estrella);
+}
+.acceso-flecha {
+  color: var(--estrella);
+}
+.ver-mas a,
+.ver-grafica {
+  font-family: var(--f-mono);
+  font-size: 0.8rem;
+}
+.opcion-fuente,
+.opcion-tema,
+.cajitas div,
+.casillas div,
+.ficha-datos div,
+.ahora-lluvia,
+.lista-lluvia li,
+.reciente-embalse {
+  border-radius: 4px;
+}
+.opcion-fuente.elegida,
+.opcion-tema.elegida {
+  border-color: var(--estrella);
+  box-shadow: 0 0 0 1px var(--estrella);
+}
+
+/* --- Pie: tinta, como la cabecera --- */
+.pie {
+  background: var(--tinta);
+  color: rgb(255 255 255 / 0.65);
+  border-top: 2px solid var(--estrella);
+}
+.pie .marca span {
+  color: #fff;
+}
+.pie-columnas h3 {
+  color: var(--estrella);
+}
+.pie-columnas a {
+  color: rgb(255 255 255 / 0.7);
+}
+.pie-columnas a:hover {
+  color: #fff;
+}
+.pie-base {
+  border-top-color: rgb(255 255 255 / 0.12);
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
 }

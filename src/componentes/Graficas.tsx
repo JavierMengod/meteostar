@@ -29,7 +29,7 @@ const ejeX = (horas: number) => (
   />
 );
 const ejeY = (props: Record<string, unknown> = {}) => (
-  <YAxis width={40} tick={{ className: "eje" }} stroke="var(--borde)" domain={["auto", "auto"]} {...props} />
+  <YAxis width={44} tick={{ className: "eje" }} stroke="var(--borde)" domain={["auto", "auto"]} {...props} />
 );
 const rejilla = <CartesianGrid stroke="var(--rejilla)" vertical={false} />;
 const leyenda = <Legend verticalAlign="top" align="left" height={26} iconType="plainline" wrapperStyle={{ fontSize: 12 }} />;
@@ -83,7 +83,7 @@ export function GraficaPresion({ datos, horas }: { datos: PuntoHistorico[]; hora
       <ComposedChart data={datos} margin={margen}>
         {rejilla}
         {ejeX(horas)}
-        {ejeY({ width: 48 })}
+        {ejeY({ width: 58 })}
         {tooltip({ Presión: "hPa" })}
         {leyenda}
         <Area dataKey="presion" name="Presión" stroke="var(--c-presion)" fill="var(--c-presion)" fillOpacity={0.15} strokeWidth={2} dot={false} isAnimationActive={false} baseValue="dataMin" />

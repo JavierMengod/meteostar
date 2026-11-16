@@ -19,9 +19,8 @@ interface Menu {
 export function Logo() {
   return (
     <svg className="logo" viewBox="0 0 40 40" aria-hidden="true">
-      <rect width="40" height="40" rx="10" />
-      <circle cx="15" cy="15" r="5.5" className="logo-sol" />
-      <path className="logo-nube" d="M11 30 h17 a5.5 5.5 0 0 0 0 -11 a8 8 0 0 0 -15 -1 a6 6 0 0 0 -2 12 z" />
+      <rect width="40" height="40" rx="6" />
+      <path className="logo-estrella" d="M20.00 7.50 L23.29 16.47 L32.84 16.83 L25.33 22.73 L27.94 31.92 L20.00 26.60 L12.06 31.92 L14.67 22.73 L7.16 16.83 L16.71 16.47 Z" />
     </svg>
   );
 }
