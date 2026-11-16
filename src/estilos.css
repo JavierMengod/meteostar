@@ -3367,37 +3367,10 @@ h3 {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.tarjeta-aforo {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-  border-style: dashed;
-}
-.tarjeta-aforo small {
-  color: var(--texto-suave);
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-}
-.tarjeta-aforo h3,
-.tarjeta-aforo p {
-  margin: 0;
-}
-.tarjeta-aforo h3 {
-  font-family: var(--f-titulo) !important;
-  font-size: 1.3rem !important;
-  font-weight: 600 !important;
-  letter-spacing: -0.01em !important;
-  text-transform: none !important;
-  color: var(--texto) !important;
-}
+
+
 
 /* --- Río: caudal estimado --- */
-.rejilla-rio {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
 .rio {
   display: grid;
   gap: 10px;
@@ -3439,30 +3412,6 @@ h3 {
 }
 .nota-rio {
   margin: 0;
-}
-@media (max-width: 800px) {
-  .rejilla-rio {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.enlaces-aforo {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-}
-.enlaces-aforo li {
-  display: grid;
-  gap: 1px;
-}
-.enlaces-aforo a {
-  color: var(--acento-texto);
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-.enlaces-aforo small {
-  font-size: 0.75rem;
 }
 .estado-modelo {
   font-family: var(--f-titulo);
