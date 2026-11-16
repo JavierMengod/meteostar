@@ -21,6 +21,7 @@ import { datosEstacion, estacionesPublicas, estacionPorSlug, estacionPorToken, t
 import { fechaAnterior, fechaLocal, inicioDia } from "../fechas";
 import { detalleEmbalse, estadoEmbalses } from "../embalses";
 import { obtenerPrevision } from "../prevision";
+import { estadoRio } from "../rio";
 import { radar, teselaRadar } from "../radar";
 import { CAPAS_SATELITE, imagenSatelite, PASOS, satelite, type CapaSatelite } from "../seguimiento";
 
@@ -192,6 +193,16 @@ app.get("/embalses", async (c) => {
   } catch (e) {
     console.error(e);
     return c.json({ error: "embalses no disponibles" }, 502);
+  }
+});
+
+app.get("/rio", async (c) => {
+  try {
+    c.header("Cache-Control", "public, max-age=1800");
+    return c.json(await estadoRio(c.executionCtx));
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "caudal no disponible" }, 502);
   }
 });
 

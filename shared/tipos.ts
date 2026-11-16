@@ -373,3 +373,30 @@ export interface DetalleEmbalse extends Embalse {
   /** Media de la misma semana en los años anteriores del histórico */
   mediaSemana: { volumen: number; porcentaje: number; anios: number } | null;
 }
+
+// ===== Río (caudal estimado por GloFAS) =====
+
+export interface DiaRio {
+  fecha: string;
+  /** Caudal estimado (m³/s); en la previsión, el escenario central */
+  caudal: number | null;
+  /** Rango de los escenarios de la previsión (null en los días pasados) */
+  minimo: number | null;
+  maximo: number | null;
+  /** Mediana de esta época del año en el histórico */
+  normal: number | null;
+  /** Percentil 90 de esta época: por encima, el río va alto */
+  alto: number | null;
+  prevision: boolean;
+}
+
+export interface RespuestaRio {
+  lat: number;
+  lon: number;
+  /** Último día ya pasado con dato */
+  actual: DiaRio | null;
+  dias: DiaRio[];
+  aviso: { nivel: "posible" | "probable"; fecha: string; caudal: number } | null;
+  /** Primer año del histórico usado para lo normal */
+  desde: string | null;
+}

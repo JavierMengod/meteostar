@@ -3390,3 +3390,58 @@ h3 {
   text-transform: none !important;
   color: var(--texto) !important;
 }
+
+/* --- Río: caudal estimado --- */
+.rejilla-rio {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.rio {
+  display: grid;
+  gap: 10px;
+}
+.rio-resumen {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.rio-resumen small {
+  color: var(--texto-suave);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+.rio-resumen p {
+  margin: 0;
+}
+.rio-resumen .numero-grande sup {
+  font-size: 0.4em;
+  margin-left: 4px;
+  color: var(--texto-suave);
+}
+.variacion.alto {
+  color: var(--e-muy-bajo);
+}
+.aviso-rio {
+  max-width: 340px;
+  font-size: 0.88rem;
+  padding: 8px 12px;
+  border-radius: var(--radio);
+  border: 1px solid var(--e-bajo);
+  background: color-mix(in srgb, var(--e-bajo) 12%, transparent);
+}
+.aviso-rio.probable {
+  border-color: var(--e-muy-bajo);
+  background: color-mix(in srgb, var(--e-muy-bajo) 14%, transparent);
+}
+.nota-rio {
+  margin: 0;
+}
+@media (max-width: 800px) {
+  .rejilla-rio {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

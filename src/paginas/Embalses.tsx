@@ -8,6 +8,7 @@ import { colorEmbalse } from "../embalses";
 import { conSigno, fechaCompleta, hora, n, nombreMes } from "../formato";
 
 const Mapa = lazy(() => import("../componentes/Mapa"));
+const Rio = lazy(() => import("../componentes/Rio"));
 
 /** Diferencia en puntos de porcentaje respecto a otra referencia. */
 function Puntos({ actual, referencia, texto }: { actual: number | null; referencia: number | null; texto: string }) {
@@ -145,8 +146,8 @@ function Destacado({ e }: { e: Embalse }) {
 const AFOROS: Record<string, { nombre: string; detalle: string; url: string; fuente: string }[]> = {
   Júcar: [
     {
-      nombre: "Caudal del Turia en Teruel",
-      detalle: "Aforo 08015, el más cercano a Villastar (aguas arriba). También el del Alfambra en Teruel (08027), justo antes de unirse al Guadalaviar.",
+      nombre: "Caudal medido en Teruel",
+      detalle: "El dato real, cada pocos minutos: aforo del Turia en Teruel (08015), el más cercano a Villastar aguas arriba, y del Alfambra en Teruel (08027).",
       url: "https://saih.chj.es/",
       fuente: "SAIH Júcar",
     },
@@ -182,6 +183,16 @@ export default function Embalses() {
 
       {casa && <Destacado e={casa} />}
 
+      <CabeceraSeccion titulo="Río Turia en Villastar" nota="Caudal estimado y previsión a 15 días" />
+      <div className="rejilla-rio">
+        <Suspense fallback={<div className="tarjeta rio" style={{ minHeight: 320 }} />}>
+          <Rio />
+        </Suspense>
+        {AFOROS.Júcar.map((a) => (
+          <Aforo key={a.nombre} a={a} />
+        ))}
+      </div>
+
       {cuencas.map((c) => {
         const r = rios(c);
         return (
@@ -196,7 +207,6 @@ export default function Embalses() {
                 .map((e) => (
                   <TarjetaEmbalse key={e.slug} e={e} />
                 ))}
-              {AFOROS[c]?.map((a) => <Aforo key={a.nombre} a={a} />)}
             </div>
           </div>
         );
