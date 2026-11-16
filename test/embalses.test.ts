@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { adaptarDetalle, adaptarEmbalse, totalEmbalses } from "../worker/embalses";
+import { adaptarDetalle, adaptarEmbalse } from "../worker/embalses";
 import { localAUnix } from "../worker/fechas";
 
 const ficha = {
@@ -41,11 +41,12 @@ describe("embalses", () => {
     vi.useRealTimers();
   });
 
-  it("suma la reserva total", () => {
-    const a = adaptarEmbalse(ficha, null);
-    const b = { ...a, slug: "pena", volumen: 11, capacidad: 18, variacion: -1 };
-    expect(totalEmbalses([a, b])).toEqual({ volumen: 37, capacidad: 72, porcentaje: 51.4, variacion: -1 });
-    expect(totalEmbalses([])).toBeNull();
+  it("compara con la misma semana del año pasado y con la media", () => {
+    const h = [...historico, { fecha: "2025-11-11", volumen_hm3: 20, fill_percentage: 37 }, { fecha: "2024-11-12", volumen_hm3: 30, fill_percentage: 55 }];
+    const e = adaptarEmbalse(ficha, h);
+    expect(e.anioPasado).toBe(37);
+    expect(e.media).toEqual({ porcentaje: 46, anios: 2 });
+    expect(adaptarEmbalse(ficha, null)).toMatchObject({ anioPasado: null, media: null });
   });
 
   it("convierte la hora de Madrid a UTC (invierno y verano)", () => {

@@ -25,6 +25,52 @@ async function pedir(ruta: string, segundos: number, ctx: Ctx): Promise<any> {
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
+/** Semana del histórico más cercana a una fecha (como mucho a 4 días). */
+function semanaCerca(historico: SemanaEmbalse[], fecha: string): SemanaEmbalse | null {
+  const objetivo = Date.parse(`${fecha}T12:00:00Z`);
+  let mejor: SemanaEmbalse | null = null;
+  let distancia = 4.5 * 86400_000;
+  for (const s of historico) {
+    const d = Math.abs(Date.parse(`${s.fecha}T12:00:00Z`) - objetivo);
+    if (d < distancia && s.volumen !== null) {
+      mejor = s;
+      distancia = d;
+    }
+  }
+  return mejor;
+}
+
+const restarAnios = (fecha: string, n: number) => `${Number(fecha.slice(0, 4)) - n}${fecha.slice(4)}`;
+
+/** Semanas del histórico en el formato de la web, ordenadas. */
+function semanasDe(historico: any[] | null): SemanaEmbalse[] {
+  return (historico ?? [])
+    .map((s) => ({ fecha: s.fecha, volumen: num(s.volumen_hm3), porcentaje: num(s.fill_percentage), variacion: num(s.variacion_semanal_hm3) }))
+    .sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+}
+
+/** La misma semana del año pasado y la media de esa semana en los años anteriores. */
+export function comparar(semanas: SemanaEmbalse[], fecha: string | null) {
+  let haceUnAnio: SemanaEmbalse | null = null;
+  let mediaSemana: { volumen: number; porcentaje: number; anios: number } | null = null;
+  if (!fecha) return { haceUnAnio, mediaSemana };
+  haceUnAnio = semanaCerca(semanas, restarAnios(fecha, 1));
+  const anteriores: SemanaEmbalse[] = [];
+  for (let n = 1; n <= 30; n++) {
+    const s = semanaCerca(semanas, restarAnios(fecha, n));
+    if (s) anteriores.push(s);
+    else if (restarAnios(fecha, n) < (semanas[0]?.fecha ?? "")) break;
+  }
+  if (anteriores.length) {
+    const media = (f: (s: SemanaEmbalse) => number | null) => {
+      const v = anteriores.map(f).filter((x): x is number => x !== null);
+      return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : 0;
+    };
+    mediaSemana = { volumen: media((s) => s.volumen), porcentaje: media((s) => s.porcentaje), anios: anteriores.length };
+  }
+  return { haceUnAnio, mediaSemana };
+}
+
 /** Convierte la ficha y el histórico de un embalse al formato de la web. */
 export function adaptarEmbalse(ficha: any, historico: any[] | null): Embalse {
   const d = ficha;
@@ -48,6 +94,7 @@ export function adaptarEmbalse(ficha: any, historico: any[] | null): Embalse {
       reciente = { ts, volumen: num(r.volumen_hm3), porcentaje: num(r.fill_percentage), nivel: num(r.nivel_m), fuente: String(r.fuente ?? "SAIH") };
     }
   }
+  const { haceUnAnio, mediaSemana } = comparar(semanasDe(historico), obs.fecha ?? null);
   return {
     slug: d.slug,
     nombre: d.nombre,
@@ -67,21 +114,8 @@ export function adaptarEmbalse(ficha: any, historico: any[] | null): Embalse {
     minimo,
     desde: semanas[0]?.fecha ?? null,
     url: `https://mapasdeembalses.es/embalse/${d.slug}/`,
-  };
-}
-
-/** Suma de los embalses: reserva total y variación semanal. */
-export function totalEmbalses(lista: Embalse[]): RespuestaEmbalses["total"] {
-  const con = lista.filter((e) => e.volumen !== null && e.capacidad);
-  if (!con.length) return null;
-  const volumen = con.reduce((s, e) => s + e.volumen!, 0);
-  const capacidad = con.reduce((s, e) => s + e.capacidad!, 0);
-  const variaciones = con.map((e) => e.variacion).filter((v): v is number => v !== null);
-  return {
-    volumen: Math.round(volumen * 10) / 10,
-    capacidad: Math.round(capacidad * 10) / 10,
-    porcentaje: Math.round((volumen / capacidad) * 1000) / 10,
-    variacion: variaciones.length ? Math.round(variaciones.reduce((a, b) => a + b, 0) * 10) / 10 : null,
+    anioPasado: haceUnAnio?.porcentaje ?? null,
+    media: mediaSemana ? { porcentaje: mediaSemana.porcentaje, anios: mediaSemana.anios } : null,
   };
 }
 
@@ -109,7 +143,7 @@ export async function estadoEmbalses(env: Env, ctx: Ctx): Promise<RespuestaEmbal
   );
   const embalses = lista.filter((e): e is Embalse => e !== null);
   const fechas = embalses.map((e) => e.fecha).filter((f): f is string => !!f).sort();
-  return { fecha: fechas.at(-1) ?? null, total: totalEmbalses(embalses), embalses, errores };
+  return { fecha: fechas.at(-1) ?? null, embalses, errores };
 }
 
 /** Todos los embalses de España (para elegir), cacheado un día. */
@@ -134,47 +168,11 @@ export async function catalogo(env: Env, ctx: Ctx): Promise<EmbalseCatalogo[]> {
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 
-/** Semana del histórico más cercana a una fecha (como mucho a 4 días). */
-function semanaCerca(historico: SemanaEmbalse[], fecha: string): SemanaEmbalse | null {
-  const objetivo = Date.parse(`${fecha}T12:00:00Z`);
-  let mejor: SemanaEmbalse | null = null;
-  let distancia = 4.5 * 86400_000;
-  for (const s of historico) {
-    const d = Math.abs(Date.parse(`${s.fecha}T12:00:00Z`) - objetivo);
-    if (d < distancia && s.volumen !== null) {
-      mejor = s;
-      distancia = d;
-    }
-  }
-  return mejor;
-}
-
-const restarAnios = (fecha: string, n: number) => `${Number(fecha.slice(0, 4)) - n}${fecha.slice(4)}`;
-
 /** Página de un embalse: ficha, histórico completo y comparativas con otros años. */
 export function adaptarDetalle(ficha: any, historico: any[] | null): DetalleEmbalse {
   const base = adaptarEmbalse(ficha, historico);
-  const semanas: SemanaEmbalse[] = (historico ?? [])
-    .map((s) => ({ fecha: s.fecha, volumen: num(s.volumen_hm3), porcentaje: num(s.fill_percentage), variacion: num(s.variacion_semanal_hm3) }))
-    .sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
-  let haceUnAnio: SemanaEmbalse | null = null;
-  let mediaSemana: DetalleEmbalse["mediaSemana"] = null;
-  if (base.fecha) {
-    haceUnAnio = semanaCerca(semanas, restarAnios(base.fecha, 1));
-    const anteriores: SemanaEmbalse[] = [];
-    for (let n = 1; n <= 30; n++) {
-      const s = semanaCerca(semanas, restarAnios(base.fecha, n));
-      if (s) anteriores.push(s);
-      else if (restarAnios(base.fecha, n) < (semanas[0]?.fecha ?? "")) break;
-    }
-    if (anteriores.length) {
-      const media = (f: (s: SemanaEmbalse) => number | null) => {
-        const v = anteriores.map(f).filter((x): x is number => x !== null);
-        return Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10;
-      };
-      mediaSemana = { volumen: media((s) => s.volumen), porcentaje: media((s) => s.porcentaje), anios: anteriores.length };
-    }
-  }
+  const semanas = semanasDe(historico);
+  const { haceUnAnio, mediaSemana } = comparar(semanas, base.fecha);
   return {
     ...base,
     municipio: ficha.municipio ?? null,

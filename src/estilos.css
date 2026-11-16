@@ -2505,48 +2505,6 @@ h3 {
   --e-bajo: #d08a10;
   --e-muy-bajo: #d4502c;
 }
-.resumen-embalses {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px 30px;
-  flex-wrap: wrap;
-  padding: 22px 24px;
-}
-.resumen-embalses h1 {
-  margin: 0;
-  font-size: 2.4rem;
-}
-.resumen-embalses p {
-  margin: 4px 0 0;
-}
-.reserva-total {
-  display: grid;
-  justify-items: end;
-  text-align: right;
-}
-.reserva-total small {
-  color: var(--texto-suave);
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-}
-.reserva-total b {
-  font-family: var(--f-titulo);
-  font-size: 3.4rem;
-  line-height: 1.05;
-}
-.reserva-total b span {
-  font-size: 0.45em;
-  margin-left: 2px;
-}
-.reserva-total p {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  font-size: 0.88rem;
-}
 .tarjeta-embalse {
   display: grid;
   gap: 6px;
@@ -2607,15 +2565,6 @@ h3 {
   display: grid;
   gap: 4px;
   padding-top: 8px;
-}
-@media (max-width: 600px) {
-  .reserva-total {
-    justify-items: start;
-    text-align: left;
-  }
-  .reserva-total p {
-    justify-content: flex-start;
-  }
 }
 
 /* Página de un embalse */
@@ -3131,7 +3080,6 @@ h3 {
 .dia-temps,
 .resumen-dato b,
 .comparacion b,
-.reserva-total b,
 .casillas b,
 .acumulados b,
 .fila-extremo b,
@@ -3350,4 +3298,72 @@ h3 {
 }
 :root[data-theme="contraste"] body {
   background-image: none;
+}
+
+/* --- Embalses: el de casa destacado y comparativas --- */
+.cabecera-embalses {
+  margin: 8px 0 14px;
+}
+.cabecera-embalses h1 {
+  margin: 0;
+  font-size: 2.4rem;
+}
+.cabecera-embalses p {
+  margin: 4px 0 0;
+}
+.embalse-destacado {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 18px 32px;
+  padding: 22px 24px;
+  color: inherit;
+  text-decoration: none;
+  border-top: 3px solid var(--estrella);
+}
+.destacado-estado,
+.destacado-detalle {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.destacado-estado p,
+.destacado-detalle p {
+  margin: 0;
+}
+.destacado-estado small {
+  color: var(--texto-suave);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+.destacado-estado h2 {
+  margin: 0;
+  font-family: var(--f-titulo);
+  font-size: 2rem;
+  font-weight: 600;
+}
+.destacado-estado .numero-enorme {
+  margin: 4px 0 0;
+}
+.destacado-estado .numero-enorme sup {
+  color: inherit;
+}
+.destacado-detalle .serie-embalse {
+  height: 90px;
+}
+.comparativa-embalse {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 0.88rem;
+}
+.destacado-detalle .comparativa-embalse {
+  font-size: 1rem;
+  gap: 6px;
+}
+@media (max-width: 700px) {
+  .embalse-destacado {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

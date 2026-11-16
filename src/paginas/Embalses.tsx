@@ -1,4 +1,5 @@
-// Embalses: reserva total y una tarjeta por embalse (boletín semanal del MITECO y dato reciente del SAIH).
+// Embalses: el primero de la lista (el «de casa») destacado arriba y el resto agrupados por cuenca.
+// Datos del boletín semanal del MITECO y, si lo hay, el dato reciente del SAIH.
 import { lazy, Suspense } from "react";
 import type { Embalse, RespuestaEmbalses } from "../../shared/tipos";
 import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
@@ -8,6 +9,28 @@ import { conSigno, fechaCompleta, hora, n, nombreMes } from "../formato";
 
 const Mapa = lazy(() => import("../componentes/Mapa"));
 
+/** Diferencia en puntos de porcentaje respecto a otra referencia. */
+function Puntos({ actual, referencia, texto }: { actual: number | null; referencia: number | null; texto: string }) {
+  if (actual == null || referencia == null) return null;
+  const d = Math.round(actual - referencia);
+  const clase = d > 0 ? "sube" : d < 0 ? "baja" : "estable";
+  return (
+    <li>
+      <span className="suave">{texto}</span> <b>{n(referencia, 0)} %</b>{" "}
+      <span className={`variacion ${clase}`}>{d === 0 ? "igual" : `${d > 0 ? "+" : "−"}${Math.abs(d)} puntos ahora`}</span>
+    </li>
+  );
+}
+
+function Comparativa({ e }: { e: Embalse }) {
+  if (e.anioPasado == null && !e.media) return null;
+  return (
+    <ul className="comparativa-embalse">
+      <Puntos actual={e.porcentaje} referencia={e.anioPasado} texto="Hace un año" />
+      {e.media && <Puntos actual={e.porcentaje} referencia={e.media.porcentaje} texto={`Media de ${e.media.anios} años`} />}
+    </ul>
+  );
+}
 
 function Variacion({ v }: { v: number | null }) {
   if (v === null) return null;
@@ -48,7 +71,7 @@ function TarjetaEmbalse({ e }: { e: Embalse }) {
         {e.provincia}
       </p>
       <p className="numero-medio" style={{ color }}>
-        {n(e.porcentaje)}
+        {n(e.porcentaje, 0)}
         <sup>%</sup>
       </p>
       <div className="barra-embalse">
@@ -58,6 +81,7 @@ function TarjetaEmbalse({ e }: { e: Embalse }) {
         <b>{n(e.volumen, 0)} hm³</b> <span className="suave">de {n(e.capacidad, 0)} hm³</span>
       </p>
       <Variacion v={e.variacion} />
+      <Comparativa e={e} />
       <Serie serie={e.serie} color={color} />
       {e.maximo && e.minimo && (
         <p className="suave pequeno">
@@ -65,14 +89,54 @@ function TarjetaEmbalse({ e }: { e: Embalse }) {
           {mesAnio(e.minimo.fecha)}){e.desde && ` · desde ${e.desde.slice(0, 4)}`}
         </p>
       )}
-      {e.reciente && (
-        <p className="reciente-embalse">
-          <span className="mono">{e.reciente.fuente}</span> · {hora(e.reciente.ts)}: <b>{n(e.reciente.volumen)} hm³</b>
-          {e.reciente.porcentaje !== null && ` (${n(e.reciente.porcentaje)} %)`}
-          {e.reciente.nivel !== null && ` · cota ${n(e.reciente.nivel, 2)} m`}
-        </p>
-      )}
+      <Reciente e={e} />
       <span className="ver-grafica">Ver gráfica y datos ›</span>
+    </a>
+  );
+}
+
+function Reciente({ e }: { e: Embalse }) {
+  if (!e.reciente) return null;
+  return (
+    <p className="reciente-embalse">
+      <span className="mono">{e.reciente.fuente}</span> · {hora(e.reciente.ts)}: <b>{n(e.reciente.volumen)} hm³</b>
+      {e.reciente.porcentaje !== null && ` (${n(e.reciente.porcentaje)} %)`}
+      {e.reciente.nivel !== null && ` · cota ${n(e.reciente.nivel, 2)} m`}
+    </p>
+  );
+}
+
+/** El embalse de casa, grande y arriba. */
+function Destacado({ e }: { e: Embalse }) {
+  const color = colorEmbalse(e.porcentaje);
+  return (
+    <a href={`/embalses/${e.slug}`} className="tarjeta embalse-destacado enlace">
+      <div className="destacado-estado">
+        <small className="mono">EL EMBALSE DE CASA</small>
+        <h2>{e.nombre}</h2>
+        <p className="suave pequeno">
+          {e.rio ? `Río ${e.rio} · ` : ""}
+          {e.provincia}
+        </p>
+        <p className="numero-enorme" style={{ color }}>
+          {n(e.porcentaje, 0)}
+          <sup>%</sup>
+        </p>
+        <div className="barra-embalse grande">
+          <i style={{ width: `${Math.min(100, e.porcentaje ?? 0)}%`, background: color }} />
+        </div>
+        <p>
+          <b>{n(e.volumen, 0)} hm³</b> <span className="suave">de {n(e.capacidad, 0)} hm³</span>
+        </p>
+        <Variacion v={e.variacion} />
+      </div>
+      <div className="destacado-detalle">
+        <Comparativa e={e} />
+        <Serie serie={e.serie} color={color} />
+        <p className="suave pequeno">Último año, porcentaje semanal</p>
+        <Reciente e={e} />
+        <span className="ver-grafica">Ver gráfica y datos ›</span>
+      </div>
     </a>
   );
 }
@@ -80,45 +144,39 @@ function TarjetaEmbalse({ e }: { e: Embalse }) {
 export default function Embalses() {
   const { datos, error } = usePeticion<RespuestaEmbalses>("/api/embalses", 30 * 60_000);
   if (!datos) return <Cargando error={error} />;
-  const cuencas = [...new Set(datos.embalses.map((e) => e.cuenca))];
-  const t = datos.total;
+  const [casa, ...resto] = datos.embalses;
+  const cuencas = [...new Set(resto.map((e) => e.cuenca))];
+  const rios = (c: string) => [...new Set(datos.embalses.filter((e) => e.cuenca === c && e.rio).map((e) => e.rio!))];
 
   return (
     <>
-      <section className="tarjeta resumen-embalses">
-        <div>
-          <h1>Embalses</h1>
-          <p className="suave">
-            Teruel y la cuenca del Turia · boletín semanal del MITECO
-            {datos.fecha && ` del ${fechaCompleta(datos.fecha)}`}
-          </p>
-        </div>
-        {t && (
-          <div className="reserva-total">
-            <small className="mono">RESERVA TOTAL DE LOS EMBALSES</small>
-            <b style={{ color: colorEmbalse(t.porcentaje) }}>
-              {n(t.porcentaje)}
-              <span>%</span>
-            </b>
-            <p>
-              {n(t.volumen, 0)} de {n(t.capacidad, 0)} hm³ <Variacion v={t.variacion} />
-            </p>
-          </div>
-        )}
+      <section className="cabecera-embalses">
+        <h1>Embalses</h1>
+        <p className="suave">
+          Boletín semanal del MITECO{datos.fecha && ` del ${fechaCompleta(datos.fecha)}`}. Se actualiza una vez por semana.
+        </p>
       </section>
 
-      {cuencas.map((c) => (
-        <div key={c}>
-          <CabeceraSeccion titulo={`Cuenca del ${c}`} nota="Volumen almacenado y porcentaje de su capacidad" />
-          <div className="rejilla-3">
-            {datos.embalses
-              .filter((e) => e.cuenca === c)
-              .map((e) => (
-                <TarjetaEmbalse key={e.slug} e={e} />
-              ))}
+      {casa && <Destacado e={casa} />}
+
+      {cuencas.map((c) => {
+        const r = rios(c);
+        return (
+          <div key={c}>
+            <CabeceraSeccion
+              titulo={`Cuenca del ${c}`}
+              nota={r.length ? `${r.length > 1 ? "Ríos" : "Río"} ${r.join(", ").replace(/, ([^,]*)$/, " y $1")}` : undefined}
+            />
+            <div className="rejilla-3">
+              {resto
+                .filter((e) => e.cuenca === c)
+                .map((e) => (
+                  <TarjetaEmbalse key={e.slug} e={e} />
+                ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {datos.embalses.some((e) => e.lat !== null) && (
         <>

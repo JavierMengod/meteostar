@@ -331,11 +331,14 @@ export interface Embalse {
   /** Primer dato del histórico */
   desde: string | null;
   url: string;
+  /** Porcentaje de la misma semana del año pasado */
+  anioPasado: number | null;
+  /** Porcentaje medio de esta semana en los años anteriores del histórico */
+  media: { porcentaje: number; anios: number } | null;
 }
 
 export interface RespuestaEmbalses {
   fecha: string | null;
-  total: { volumen: number; capacidad: number; porcentaje: number; variacion: number | null } | null;
   embalses: Embalse[];
   /** Embalses configurados que no se han podido leer */
   errores: string[];
