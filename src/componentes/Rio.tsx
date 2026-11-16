@@ -39,42 +39,49 @@ function Grafica({ dias }: { dias: DiaRio[] }) {
         {ultimoPasado && <ReferenceLine x={ultimoPasado} stroke="var(--texto-suave)" strokeDasharray="2 3" />}
         <Area dataKey="rango" name="Rango de la previsión" stroke="none" fill="var(--c-lluvia)" fillOpacity={0.18} isAnimationActive={false} />
         <Line dataKey="normal" name="Normal para la época" stroke="var(--texto-suave)" strokeDasharray="4 4" dot={false} strokeWidth={1.4} isAnimationActive={false} />
-        <Line dataKey="pasado" name="Caudal estimado" stroke="var(--c-lluvia)" dot={false} strokeWidth={2.2} isAnimationActive={false} />
-        <Line dataKey="prevista" name="Previsión" stroke="var(--c-lluvia)" strokeDasharray="5 4" dot={false} strokeWidth={2} isAnimationActive={false} />
+        <Line dataKey="pasado" name="Modelo" stroke="var(--c-lluvia)" dot={false} strokeWidth={2.2} isAnimationActive={false} />
+        <Line dataKey="prevista" name="Previsión del modelo" stroke="var(--c-lluvia)" strokeDasharray="5 4" dot={false} strokeWidth={2} isAnimationActive={false} />
       </ComposedChart>
     </ResponsiveContainer>
   );
 }
 
+/** Hacia dónde va el río según el modelo: compara los próximos días con hoy (en sus propias cifras). */
+export function tendenciaPrevista(dias: DiaRio[]): { texto: string; clase: string } | null {
+  const hoy = dias.filter((d) => !d.prevision && d.caudal !== null).at(-1);
+  const proximos = dias.filter((d) => d.prevision && d.caudal !== null).slice(0, 7);
+  if (!hoy || !proximos.length) return null;
+  const max = Math.max(...proximos.map((d) => d.caudal!));
+  const fin = proximos.at(-1)!.caudal!;
+  const base = Math.max(hoy.caudal!, 0.05);
+  if (max / base >= 1.3) return { texto: "Se espera que suba en los próximos días", clase: "sube" };
+  if (fin / base <= 0.75) return { texto: "Se espera que siga bajando", clase: "baja" };
+  return { texto: "Sin cambios importantes en los próximos días", clase: "estable" };
+}
+
 export default function Rio() {
   const { datos, error } = usePeticion<RespuestaRio>("/api/rio", 60 * 60_000);
   if (!datos) return error ? <p className="vacio">El caudal estimado no está disponible ahora mismo.</p> : <div className="tarjeta rio" style={{ minHeight: 320 }} />;
-  const a = datos.actual;
-  const estado = a ? estadoCaudal(a) : null;
+  const estado = tendenciaPrevista(datos.dias);
   return (
     <section className="tarjeta rio">
       <div className="rio-resumen">
         <div>
-          <small className="mono">CAUDAL ESTIMADO HOY</small>
-          <p className="numero-grande">
-            {n(a?.caudal ?? null)}
-            <sup>m³/s</sup>
-          </p>
-          {estado && <span className={`variacion ${estado.clase}`}>{estado.texto}</span>}
-          {a?.normal !== null && a?.normal !== undefined && <p className="suave pequeno">Lo normal estos días: {n(a.normal)} m³/s</p>}
+          <small className="mono">PRÓXIMOS 7 DÍAS</small>
+          {estado && <p className={`estado-modelo ${estado.clase}`}>{estado.texto}</p>}
         </div>
         {datos.aviso && (
           <p className={`aviso-rio ${datos.aviso.nivel}`}>
             <b>{datos.aviso.nivel === "probable" ? "Crecida probable" : "Posible crecida"}</b> a partir del {diaSemana(datos.aviso.fecha)}{" "}
-            {fechaCorta(datos.aviso.fecha)}: hasta {n(datos.aviso.caudal)} m³/s
-            {datos.aviso.nivel === "posible" && " en el escenario más lluvioso"}.
+            {fechaCorta(datos.aviso.fecha)}
+            {datos.aviso.nivel === "posible" ? " en el escenario más lluvioso" : ""}.
           </p>
         )}
       </div>
       <Grafica dias={datos.dias} />
       <p className="suave pequeno nota-rio">
-        Estimación diaria del modelo hidrológico GloFAS (Copernicus), no una medición: calcula el caudal a partir de la lluvia y el terreno, y puede no
-        reflejar bien lo que suelta el embalse de Arquillo. «Normal» es la mediana de esta época del año desde {datos.desde?.slice(0, 4) ?? "1997"}.
+        Modelo hidrológico diario GloFAS (Copernicus): calcula el caudal a partir de la lluvia y el terreno. Sus cifras pueden diferir mucho
+        del caudal medido (no conoce lo que suelta Arquillo), así que sirve para ver la tendencia y si se espera una crecida, no como dato. «Normal» es la mediana de esta época del año desde {datos.desde?.slice(0, 4) ?? "1997"}.
         Datos de{" "}
         <a href="https://open-meteo.com/en/docs/flood-api" target="_blank" rel="noreferrer">
           Open-Meteo

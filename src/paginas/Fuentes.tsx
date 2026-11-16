@@ -58,15 +58,20 @@ export default function Fuentes() {
           Datos procesados por MapasDeEmbalses.es. Fuente original: boletín hidrológico semanal del MITECO y, en el dato reciente, el SAIH de
           cada confederación hidrográfica (provisional, no contrastado).
         </Fuente>
+        <Fuente titulo="Aforos de río" enlaces={[["Observatorio del Agua (MITECO)", "https://observatorioagua.miteco.es/hidrologia/"]]}>
+          Caudal y nivel medidos cada 10 minutos en las estaciones de aforo de las confederaciones hidrográficas (Turia y Alfambra en Teruel,
+          Confederación Hidrográfica del Júcar), publicados por el Observatorio del Agua GOTA del Ministerio para la Transición Ecológica.
+          Fuente: MITECO. Datos en tiempo real, provisionales y sin validar.
+        </Fuente>
         <Fuente
-          titulo="Caudal del río"
+          titulo="Previsión del caudal"
           enlaces={[
             ["Open-Meteo (crecidas)", "https://open-meteo.com/en/docs/flood-api"],
             ["Copernicus GloFAS", "https://global-flood.emergency.copernicus.eu/"],
           ]}
         >
           Caudal diario estimado y previsión del modelo hidrológico GloFAS del servicio de emergencias de Copernicus, a través de Open-Meteo.
-          Licencia CC BY 4.0. Es una estimación, no una medición. El caudal medido se puede consultar en la web del SAIH Júcar.
+          Licencia CC BY 4.0. Es una estimación que se usa solo para la tendencia, no una medición.
         </Fuente>
         <Fuente titulo="Mapas" enlaces={[["© OpenStreetMap", "https://www.openstreetmap.org/copyright"]]}>
           Cartografía de los colaboradores de OpenStreetMap, con licencia ODbL.

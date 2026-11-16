@@ -4,6 +4,7 @@ import cuenta from "./api/cuenta";
 import publica from "./api/publica";
 import { leerEstaciones } from "./cron";
 import { borrarAntiguas } from "./db";
+import { actualizarAforos } from "./aforos";
 import { archivarRadar } from "./radar";
 import { actualizarSatelite } from "./seguimiento";
 
@@ -26,9 +27,10 @@ export default {
       ctx.waitUntil(actualizarSatelite(env, ctx));
       return;
     }
-    // Cada 10 minutos: archivo del radar de la zona (otra invocación aparte)
+    // Cada 10 minutos: archivo del radar de la zona y lecturas de los aforos de río (otra invocación aparte)
     if (controller.cron === "8-59/10 * * * *") {
       ctx.waitUntil(archivarRadar(env).catch((e) => console.error("radar", e)));
+      ctx.waitUntil(actualizarAforos(env).catch((e) => console.error("aforos", e)));
       return;
     }
     // Cada minuto: estaciones que se leen por API

@@ -400,3 +400,24 @@ export interface RespuestaRio {
   /** Primer año del histórico usado para lo normal */
   desde: string | null;
 }
+
+// ===== Aforos medidos (Observatorio del Agua, MITECO) =====
+
+export interface Aforo {
+  id: string;
+  nombre: string;
+  rio: string;
+  /** Código de la estación de aforo de la confederación */
+  codigo: string;
+  ultimo: { t: number; caudal: number | null; nivel: number | null } | null;
+  /** Variación del caudal en las últimas 3 horas (m³/s) */
+  tendencia: number | null;
+  /** Umbrales oficiales de aviso (m³/s), de menor a mayor */
+  umbrales: number[];
+  /** [segundos, caudal m³/s, nivel m] */
+  serie: [number, number | null, number | null][];
+}
+
+export interface RespuestaAforos {
+  aforos: Aforo[];
+}

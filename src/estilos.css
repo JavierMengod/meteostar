@@ -3464,3 +3464,51 @@ h3 {
 .enlaces-aforo small {
   font-size: 0.75rem;
 }
+.estado-modelo {
+  font-family: var(--f-titulo);
+  font-size: 1.4rem;
+  margin: 2px 0 0;
+}
+.estado-modelo.sube,
+.estado-modelo.alto {
+  color: var(--e-bajo);
+}
+.estado-modelo.baja {
+  color: var(--texto-suave);
+}
+.rio-situacion {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  text-align: right;
+}
+.insignia-aviso {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: var(--radio);
+  font-weight: 600;
+  font-size: 0.88rem;
+  border: 1px solid var(--e-alto);
+  color: var(--e-alto);
+}
+.insignia-aviso.aviso-1 {
+  border-color: #c9a000;
+  color: #8a6d00;
+  background: #fff6c2;
+}
+.insignia-aviso.aviso-2 {
+  border-color: #ff8c1a;
+  color: #8a4300;
+  background: #ffe2c2;
+}
+.insignia-aviso.aviso-3 {
+  border-color: #da1616;
+  color: #fff;
+  background: #da1616;
+}
+@media (max-width: 600px) {
+  .rio-situacion {
+    justify-items: start;
+    text-align: left;
+  }
+}

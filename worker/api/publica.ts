@@ -22,6 +22,7 @@ import { fechaAnterior, fechaLocal, inicioDia } from "../fechas";
 import { detalleEmbalse, estadoEmbalses } from "../embalses";
 import { obtenerPrevision } from "../prevision";
 import { estadoRio } from "../rio";
+import { estadoAforos } from "../aforos";
 import { radar, teselaRadar } from "../radar";
 import { CAPAS_SATELITE, imagenSatelite, PASOS, satelite, type CapaSatelite } from "../seguimiento";
 
@@ -193,6 +194,16 @@ app.get("/embalses", async (c) => {
   } catch (e) {
     console.error(e);
     return c.json({ error: "embalses no disponibles" }, 502);
+  }
+});
+
+app.get("/aforos", async (c) => {
+  try {
+    c.header("Cache-Control", "public, max-age=300");
+    return c.json(await estadoAforos(c.env));
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "aforos no disponibles" }, 502);
   }
 });
 

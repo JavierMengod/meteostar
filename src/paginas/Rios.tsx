@@ -1,11 +1,12 @@
-// Ríos: caudal estimado del Turia en Villastar (Copernicus GloFAS) y enlace al caudal medido en el SAIH.
+// Ríos: caudal medido del Turia en Teruel (Observatorio del Agua, MITECO) y previsión del modelo GloFAS de Copernicus.
 import { lazy, Suspense } from "react";
 import { CabeceraSeccion } from "../componentes/Piezas";
 
 const Rio = lazy(() => import("../componentes/Rio"));
+const Aforos = lazy(() => import("../componentes/Aforos"));
 
 /** Aforos de río por cuenca. Sus datos en tiempo real solo se publican en la web del SAIH, así que se enlazan. */
-/** Páginas donde se ve el caudal medido del Turia en Teruel (no hay acceso abierto para mostrarlo aquí). */
+/** Otras webs donde consultar el aforo. */
 const ENLACES_AFORO: [string, string, string][] = [
   ["Turia en Teruel, nivel y caudal", "lluviasypantanos.es", "https://lluviasypantanos.es/rio/turia-teruel"],
   ["Mapa oficial de aforos en directo", "Observatorio del Agua (MITECO)", "https://observatorioagua.miteco.es/hidrologia/"],
@@ -15,10 +16,10 @@ const ENLACES_AFORO: [string, string, string][] = [
 function Aforo() {
   return (
     <section className="tarjeta tarjeta-aforo">
-      <small className="mono">CAUDAL MEDIDO · EN TIEMPO REAL</small>
+      <small className="mono">MÁS DATOS</small>
       <h3>Turia en Teruel</h3>
       <p className="suave pequeno">
-        El dato real del aforo de la confederación (08015), el más cercano a Villastar aguas arriba. Se puede consultar en:
+        Fichas completas del aforo 08015, con nivel, caudal y lluvia:
       </p>
       <ul className="enlaces-aforo">
         {ENLACES_AFORO.map(([texto, sitio, url]) => (
@@ -39,16 +40,21 @@ export default function Rios() {
     <>
       <section className="cabecera-embalses">
         <h1>Ríos</h1>
-        <p className="suave">Cómo va el Turia en Villastar comparado con lo normal y qué se espera en los próximos 15 días.</p>
+        <p className="suave">El caudal medido del Turia junto a Villastar y lo que se espera en los próximos 15 días.</p>
       </section>
 
-      <CabeceraSeccion titulo="Río Turia en Villastar" nota="Caudal estimado y previsión a 15 días" />
+      <CabeceraSeccion titulo="Río Turia" nota="Caudal medido cada 10 minutos" />
       <div className="rejilla-rio">
-        <Suspense fallback={<div className="tarjeta rio" style={{ minHeight: 320 }} />}>
-          <Rio />
+        <Suspense fallback={<div className="tarjeta rio" style={{ minHeight: 360 }} />}>
+          <Aforos />
         </Suspense>
         <Aforo />
       </div>
+
+      <CabeceraSeccion titulo="Previsión" nota="Tendencia a 15 días según el modelo de Copernicus" />
+      <Suspense fallback={<div className="tarjeta rio" style={{ minHeight: 320 }} />}>
+        <Rio />
+      </Suspense>
     </>
   );
 }
