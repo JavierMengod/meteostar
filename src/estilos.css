@@ -3287,3 +3287,67 @@ h3 {
   font-family: var(--f-mono);
   font-size: 0.72rem;
 }
+
+/* --- Temas con el rediseño: cada uno con su tinta (cabecera y pie) y su "estrella" (acento) --- */
+:root[data-theme="arena"] {
+  --fondo: #ece2cf;
+  --superficie: #f8f1e4;
+  --superficie-2: #efe4cf;
+  --borde: #d8c7a6;
+  --rejilla: #e3d5b9;
+  --tinta: #3d2a17;
+  --estrella: #d08a2c;
+  --acento: #8e5814;
+  --acento-texto: #8e5814;
+  --acento-suave: #f1dfc0;
+}
+:root[data-theme="mudejar"] {
+  --fondo: #eef0e8;
+  --superficie: #fbfcf7;
+  --superficie-2: #e9eee1;
+  --borde: #cfd8c4;
+  --rejilla: #dde5d2;
+  --tinta: #173d2e;
+  --estrella: #c9592f;
+  --acento: #1f6b45;
+  --acento-texto: #1f6b45;
+  --acento-suave: #d7ebdd;
+}
+:root[data-theme="noche"] {
+  --fondo: #08101f;
+  --superficie: #0f1a30;
+  --superficie-2: #15223d;
+  --borde: #22345a;
+  --rejilla: #18284a;
+  --tinta: #040812;
+  --estrella: #8fb4ff;
+  --acento: #6f9cff;
+  --acento-texto: #a9c4ff;
+  --acento-suave: #172a52;
+  --sobre-acento: #06102a;
+}
+:root[data-theme="bosque"] {
+  --fondo: #0b130e;
+  --superficie: #121d16;
+  --superficie-2: #18261d;
+  --borde: #26392d;
+  --rejilla: #1c2b22;
+  --tinta: #050a07;
+  --estrella: #7ed6a2;
+  --acento: #4cc38a;
+  --acento-texto: #8fe0b2;
+  --acento-suave: #163427;
+  --sobre-acento: #06140c;
+}
+:root[data-theme="contraste"] {
+  --tinta: #000000;
+  --estrella: #ffd400;
+  --sobre-acento: #000000;
+}
+/* En los temas oscuros la cuadrícula de puntos va más suave */
+:root[data-modo="oscuro"] body {
+  background-image: radial-gradient(color-mix(in srgb, var(--texto) 6%, transparent) 1px, transparent 1.2px);
+}
+:root[data-theme="contraste"] body {
+  background-image: none;
+}

@@ -10,18 +10,18 @@ export interface InfoTema {
   detalle: string;
   /** Familia del tema: decide el aspecto de mapas y controles del navegador. null = la del dispositivo */
   modo: "claro" | "oscuro" | null;
-  /** Colores para la muestra: fondo, tarjeta y acento */
+  /** Colores para la muestra: fondo, tinta (cabecera) y acento */
   muestra: [string, string, string];
 }
 
 export const TEMAS: InfoTema[] = [
-  { id: "auto", nombre: "Automático", detalle: "Claro u oscuro, como tu dispositivo", modo: null, muestra: ["#eef1f4", "#151c24", "#0e7c6b"] },
-  { id: "claro", nombre: "Claro", detalle: "Siempre claro", modo: "claro", muestra: ["#eef1f4", "#ffffff", "#0e7c6b"] },
-  { id: "oscuro", nombre: "Oscuro", detalle: "Siempre oscuro", modo: "oscuro", muestra: ["#0d1218", "#151c24", "#35b9a2"] },
-  { id: "arena", nombre: "Arena", detalle: "Cálido, tonos tierra", modo: "claro", muestra: ["#f3eee4", "#fffaf1", "#b06f1d"] },
-  { id: "mudejar", nombre: "Mudéjar", detalle: "Cerámica de Teruel: verde y terracota", modo: "claro", muestra: ["#f4f0e8", "#fffdf8", "#2e7d4f"] },
-  { id: "noche", nombre: "Noche", detalle: "Azul marino", modo: "oscuro", muestra: ["#0a1120", "#111a2e", "#5b8def"] },
-  { id: "bosque", nombre: "Bosque", detalle: "Verde oscuro", modo: "oscuro", muestra: ["#0c140f", "#131e17", "#3fb37f"] },
+  { id: "auto", nombre: "Automático", detalle: "Papel o cielo nocturno, como tu dispositivo", modo: null, muestra: ["#f3efe6", "#0c0e1c", "#d99a25"] },
+  { id: "claro", nombre: "Papel", detalle: "Claro: papel, tinta azul y dorado", modo: "claro", muestra: ["#f3efe6", "#151a3d", "#d99a25"] },
+  { id: "oscuro", nombre: "Cielo nocturno", detalle: "Oscuro: azul noche y dorado", modo: "oscuro", muestra: ["#0c0e1c", "#141730", "#f0b34a"] },
+  { id: "arena", nombre: "Arena", detalle: "Claro, tierra y ocre", modo: "claro", muestra: ["#ece2cf", "#3d2a17", "#d08a2c"] },
+  { id: "mudejar", nombre: "Mudéjar", detalle: "Cerámica de Teruel: verde y terracota", modo: "claro", muestra: ["#eef0e8", "#173d2e", "#c9592f"] },
+  { id: "noche", nombre: "Noche", detalle: "Oscuro, azul y plata", modo: "oscuro", muestra: ["#08101f", "#0f1a30", "#8fb4ff"] },
+  { id: "bosque", nombre: "Bosque", detalle: "Oscuro, verde", modo: "oscuro", muestra: ["#0b130e", "#121d16", "#7ed6a2"] },
   { id: "contraste", nombre: "Alto contraste", detalle: "Negro y amarillo, máxima legibilidad", modo: "oscuro", muestra: ["#000000", "#0a0a0a", "#ffd400"] },
 ];
 
