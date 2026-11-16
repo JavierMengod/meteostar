@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Red de estaciones meteorológicas de Villastar y la vega del Turia (Teruel) en tiempo real" />
+    <title>Meteostar</title>
+    <script>
+      // Aplica el último tema usado antes de pintar la página (evita el parpadeo); después se ajusta al de la cuenta
+      try {
+        var t = localStorage.getItem("tema");
+        var oscuros = { oscuro: 1, noche: 1, bosque: 1, contraste: 1 };
+        if (t && t !== "auto") document.documentElement.setAttribute("data-theme", t);
+        if (oscuros[t]) document.documentElement.setAttribute("data-modo", "oscuro");
+      } catch (e) {}
+    </script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌤️</text></svg>" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

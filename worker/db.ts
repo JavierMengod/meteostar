@@ -1,0 +1,220 @@
+// Acceso a la base de datos D1. Todas las lecturas y resúmenes son por estación.
+import type { Extremo, Extremos, Lectura, PuntoHistorico, ResumenDiario, VientoMinuto } from "../shared/tipos";
+import type { ExtremosDia } from "./conectores";
+import { fechaLocal } from "./fechas";
+
+const COLUMNAS = [
+  "ts", "fuente", "temp", "hum", "rocio", "sensacion", "presion", "presion_abs", "viento", "racha",
+  "dir", "lluvia_dia", "intensidad", "radiacion", "uv", "temp_int", "hum_int",
+] as const satisfies readonly (keyof Lectura)[];
+
+/** Días que se conservan las lecturas al minuto. */
+export const DIAS_LECTURAS = 8;
+
+/**
+ * Guarda una lectura y actualiza el resumen del día.
+ * Las del envío directo sustituyen a cualquier otra del mismo minuto; las de las API nunca pisan nada.
+ * Devuelve true si se ha guardado.
+ */
+export async function guardarLectura(db: D1Database, estacionId: number, l: Lectura): Promise<boolean> {
+  const directa = l.fuente === "directo" || l.fuente === "push";
+  const verbo = directa ? "INSERT OR REPLACE" : "INSERT OR IGNORE";
+  const sql = `${verbo} INTO lecturas (estacion_id, ${COLUMNAS.join(", ")}) VALUES (?, ${COLUMNAS.map(() => "?").join(", ")})`;
+  const r = await db.prepare(sql).bind(estacionId, ...COLUMNAS.map((c) => l[c])).run();
+  if (!r.meta.changes) return false;
+  await actualizarResumen(db, estacionId, l);
+  return true;
+}
+
+// Campos del resumen: [columna del resumen, columna de la lectura, 'max' | 'min', guarda la hora]
+const CAMPOS_RESUMEN: [keyof ResumenDiario, keyof Lectura, "max" | "min", boolean][] = [
+  ["tmax", "temp", "max", true],
+  ["tmin", "temp", "min", true],
+  ["hum_max", "hum", "max", false],
+  ["hum_min", "hum", "min", false],
+  ["presion_max", "presion", "max", false],
+  ["presion_min", "presion", "min", false],
+  ["viento_max", "viento", "max", false],
+  ["racha_max", "racha", "max", true],
+  ["lluvia", "lluvia_dia", "max", false],
+  ["intensidad_max", "intensidad", "max", true],
+  ["radiacion_max", "radiacion", "max", false],
+  ["uv_max", "uv", "max", false],
+];
+
+/** INSERT … ON CONFLICT que solo mejora los extremos (más alto en los máximos, más bajo en los mínimos). */
+const SQL_RESUMEN = (() => {
+  const cols: string[] = ["estacion_id", "fecha", "lecturas"];
+  const sets: string[] = ["lecturas = lecturas + excluded.lecturas"];
+  for (const [col, , tipo, conHora] of CAMPOS_RESUMEN) {
+    const mejora = `excluded.${col} IS NOT NULL AND (${col} IS NULL OR excluded.${col} ${tipo === "max" ? ">" : "<"} ${col})`;
+    cols.push(col);
+    sets.push(`${col} = CASE WHEN ${mejora} THEN excluded.${col} ELSE ${col} END`);
+    if (conHora) {
+      cols.push(`${col}_ts`);
+      sets.push(`${col}_ts = CASE WHEN ${mejora} THEN excluded.${col}_ts ELSE ${col}_ts END`);
+    }
+  }
+  return `INSERT INTO resumen_diario (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})
+    ON CONFLICT(estacion_id, fecha) DO UPDATE SET ${sets.join(", ")}`;
+})();
+
+function valoresResumen(estacionId: number, fecha: string, lecturas: number, valor: (campo: keyof Lectura, col: keyof ResumenDiario) => number | null, ts: number | null) {
+  const valores: unknown[] = [estacionId, fecha, lecturas];
+  for (const [col, campo, , conHora] of CAMPOS_RESUMEN) {
+    const v = valor(campo, col);
+    valores.push(v);
+    if (conHora) valores.push(v === null ? null : ts);
+  }
+  return valores;
+}
+
+async function actualizarResumen(db: D1Database, estacionId: number, l: Lectura) {
+  await db
+    .prepare(SQL_RESUMEN)
+    .bind(...valoresResumen(estacionId, fechaLocal(l.ts), 1, (campo) => l[campo] as number | null, l.ts))
+    .run();
+}
+
+/** Mezcla en el resumen de hoy los extremos que da la propia fuente (sin hora conocida). */
+export async function guardarExtremosDia(db: D1Database, estacionId: number, fecha: string, ex: ExtremosDia) {
+  await db
+    .prepare(SQL_RESUMEN)
+    .bind(...valoresResumen(estacionId, fecha, 0, (_c, col) => (ex as Record<string, number | null>)[col] ?? null, null))
+    .run();
+}
+
+export async function ultimaLectura(db: D1Database, estacionId: number): Promise<Lectura | null> {
+  return db.prepare("SELECT * FROM lecturas WHERE estacion_id = ? ORDER BY ts DESC LIMIT 1").bind(estacionId).first<Lectura>();
+}
+
+export async function resumen(db: D1Database, estacionId: number, fecha: string): Promise<ResumenDiario | null> {
+  return db.prepare("SELECT * FROM resumen_diario WHERE estacion_id = ? AND fecha = ?").bind(estacionId, fecha).first<ResumenDiario>();
+}
+
+export async function resumenes(db: D1Database, estacionId: number, desde: string): Promise<ResumenDiario[]> {
+  const r = await db
+    .prepare("SELECT * FROM resumen_diario WHERE estacion_id = ? AND fecha >= ? ORDER BY fecha")
+    .bind(estacionId, desde)
+    .all<ResumenDiario>();
+  return r.results;
+}
+
+/** Medias de 5 minutos desde un instante. */
+export async function historico(db: D1Database, estacionId: number, desde: number): Promise<PuntoHistorico[]> {
+  const r = await db
+    .prepare(
+      `SELECT (ts / 300) * 300 AS t,
+        round(avg(temp), 1) AS temp, round(avg(rocio), 1) AS rocio, round(avg(hum)) AS hum,
+        round(avg(presion), 1) AS presion, round(avg(viento), 1) AS viento, max(racha) AS racha,
+        max(CASE WHEN ts % 300 = 0 THEN dir END) AS dir,
+        max(lluvia_dia) AS lluvia_dia, max(intensidad) AS intensidad,
+        round(avg(radiacion)) AS radiacion, max(uv) AS uv
+      FROM lecturas WHERE estacion_id = ? AND ts >= ? GROUP BY t ORDER BY t`,
+    )
+    .bind(estacionId, desde)
+    .all<PuntoHistorico>();
+  return r.results;
+}
+
+/** Temperatura media cada 15 minutos (gráfica comparativa de la red). */
+export async function serieTemperatura(db: D1Database, estacionId: number, desde: number): Promise<[number, number | null][]> {
+  const r = await db
+    .prepare("SELECT (ts / 900) * 900 AS t, round(avg(temp), 1) AS v FROM lecturas WHERE estacion_id = ? AND ts >= ? GROUP BY t ORDER BY t")
+    .bind(estacionId, desde)
+    .all<{ t: number; v: number | null }>();
+  return r.results.map((x) => [x.t, x.v]);
+}
+
+export async function borrarAntiguas(db: D1Database, ahora: number) {
+  await db.prepare("DELETE FROM lecturas WHERE ts < ?").bind(ahora - DIAS_LECTURAS * 86400).run();
+  await db.prepare("DELETE FROM sesiones WHERE caduca < ?").bind(ahora).run();
+}
+
+/** Lectura más cercana a un instante (con un margen de ±10 minutos, o ±40 para fuentes horarias). */
+export async function lecturaCerca(db: D1Database, estacionId: number, ts: number, margen = 600): Promise<Lectura | null> {
+  return db
+    .prepare("SELECT * FROM lecturas WHERE estacion_id = ? AND ts BETWEEN ? AND ? ORDER BY abs(ts - ?) LIMIT 1")
+    .bind(estacionId, ts - margen, ts + margen, ts)
+    .first<Lectura>();
+}
+
+export async function vientoDesde(db: D1Database, estacionId: number, desde: number): Promise<VientoMinuto[]> {
+  const r = await db
+    .prepare("SELECT dir, viento, racha FROM lecturas WHERE estacion_id = ? AND ts >= ? ORDER BY ts")
+    .bind(estacionId, desde)
+    .all<VientoMinuto>();
+  return r.results;
+}
+
+export async function mediaVientoDesde(db: D1Database, estacionId: number, desde: number): Promise<number | null> {
+  return db.prepare("SELECT round(avg(viento), 1) AS v FROM lecturas WHERE estacion_id = ? AND ts >= ?").bind(estacionId, desde).first<number>("v");
+}
+
+export async function lluviaEntre(db: D1Database, estacionId: number, desde: string, hasta: string): Promise<number | null> {
+  return db
+    .prepare("SELECT round(sum(lluvia), 1) AS v FROM resumen_diario WHERE estacion_id = ? AND fecha BETWEEN ? AND ?")
+    .bind(estacionId, desde, hasta)
+    .first<number>("v");
+}
+
+export async function primerDia(db: D1Database, estacionId: number): Promise<string | null> {
+  return db.prepare("SELECT min(fecha) AS f FROM resumen_diario WHERE estacion_id = ?").bind(estacionId).first<string>("f");
+}
+
+// [clave en Extremos, columna, orden, columna con la hora]
+const EXTREMOS: [keyof Extremos, keyof ResumenDiario, "DESC" | "ASC", keyof ResumenDiario | null][] = [
+  ["tmax", "tmax", "DESC", "tmax_ts"],
+  ["tmin", "tmin", "ASC", "tmin_ts"],
+  ["hum_min", "hum_min", "ASC", null],
+  ["viento_max", "viento_max", "DESC", null],
+  ["racha_max", "racha_max", "DESC", "racha_max_ts"],
+  ["presion_max", "presion_max", "DESC", null],
+  ["presion_min", "presion_min", "ASC", null],
+  ["lluvia_dia_max", "lluvia", "DESC", null],
+  ["intensidad_max", "intensidad_max", "DESC", "intensidad_max_ts"],
+  ["radiacion_max", "radiacion_max", "DESC", null],
+  ["uv_max", "uv_max", "DESC", null],
+];
+
+/** Extremos, medias y totales entre dos fechas (incluidas), a partir del resumen diario. */
+export async function extremos(db: D1Database, estacionId: number, desde: string, hasta: string): Promise<Extremos> {
+  const consultas = EXTREMOS.map(([, col, orden, colTs]) =>
+    db
+      .prepare(
+        `SELECT ${col} AS valor, fecha, ${colTs ?? "NULL"} AS ts FROM resumen_diario
+         WHERE estacion_id = ? AND fecha BETWEEN ? AND ? AND ${col} IS NOT NULL ORDER BY ${col} ${orden}, fecha LIMIT 1`,
+      )
+      .bind(estacionId, desde, hasta),
+  );
+  consultas.push(
+    db
+      .prepare(
+        `SELECT round(avg(tmax), 1) AS media_tmax, round(avg(tmin), 1) AS media_tmin, round(sum(lluvia), 1) AS lluvia_total,
+           count(CASE WHEN lluvia >= 0.2 THEN 1 END) AS dias_lluvia, count(*) AS dias
+         FROM resumen_diario WHERE estacion_id = ? AND fecha BETWEEN ? AND ?`,
+      )
+      .bind(estacionId, desde, hasta),
+    db
+      .prepare(
+        `SELECT substr(fecha, 1, 7) AS mes, round(sum(lluvia), 1) AS valor FROM resumen_diario
+         WHERE estacion_id = ? AND fecha BETWEEN ? AND ? GROUP BY mes HAVING valor > 0 ORDER BY valor DESC LIMIT 1`,
+      )
+      .bind(estacionId, desde, hasta),
+  );
+  const r = await db.batch(consultas);
+  const resultado = {} as Extremos;
+  EXTREMOS.forEach(([clave], i) => {
+    (resultado as any)[clave] = (r[i].results[0] as Extremo | undefined) ?? null;
+  });
+  const agregados = r[EXTREMOS.length].results[0] as any;
+  Object.assign(resultado, {
+    media_tmax: agregados?.media_tmax ?? null,
+    media_tmin: agregados?.media_tmin ?? null,
+    lluvia_total: agregados?.lluvia_total ?? null,
+    dias_lluvia: agregados?.dias_lluvia ?? 0,
+    dias: agregados?.dias ?? 0,
+    mes_mas_lluvioso: (r[EXTREMOS.length + 1].results[0] as any) ?? null,
+  });
+  return resultado;
+}

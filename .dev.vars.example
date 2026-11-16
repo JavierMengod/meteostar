@@ -1,0 +1,12 @@
+# Copia este archivo como .dev.vars para desarrollo local.
+# En producción se configuran con: npx wrangler secret put NOMBRE
+
+# Clave para cifrar las claves de API de las estaciones (32 bytes en base64).
+# Genera una con: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+CLAVE_CIFRADO=
+
+# Código para crear la primera cuenta de administrador en /primeros-pasos (después ya no sirve)
+SETUP_TOKEN=
+
+# Clave gratuita de AEMET OpenData para las estaciones oficiales (https://opendata.aemet.es/centrodedescargas/altaUsuario)
+AEMET_API_KEY=
