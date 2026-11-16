@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Estacion } from "../../shared/tipos";
 import { enviar, navegar, useSesion, type Ruta } from "../datos";
+import { IGLESIA } from "./iglesia";
 
 interface Enlace {
   href: string;
@@ -18,9 +19,15 @@ interface Menu {
 
 export function Logo() {
   return (
-    <svg className="logo" viewBox="0 0 40 40" aria-hidden="true">
-      <rect width="40" height="40" rx="6" />
-      <path className="logo-estrella" d="M20.00 7.50 L23.29 16.47 L32.84 16.83 L25.33 22.73 L27.94 31.92 L20.00 26.60 L12.06 31.92 L14.67 22.73 L7.16 16.83 L16.71 16.47 Z" />
+    // Sello: la iglesia de Villastar bajo la estrella de Meteostar
+    <svg className="logo" viewBox="0 0 100 100" aria-hidden="true">
+      <rect width="100" height="100" rx="16" />
+      <g className="logo-estrella">
+        <path d="M26 16L28 24L36 26L28 28L26 36L24 28L16 26L24 24Z" />
+        <svg x="20" y="14" width="70.9" height="86" viewBox="0 0 1762 2137">
+          <path fillRule="evenodd" d={IGLESIA} />
+        </svg>
+      </g>
     </svg>
   );
 }
