@@ -51,7 +51,7 @@ export default function Admin() {
       <CabeceraSeccion titulo="Estaciones particulares" />
       <div className="tarjeta">{particulares.length ? particulares.map((e) => <FilaEstacionPropia key={e.id} e={e} ahora={ahora} />) : <p className="vacio">Ninguna.</p>}</div>
 
-      <CabeceraSeccion titulo="Embalses" nota="Los que se muestran en la página Hidrología (como mucho 20). El primero sale destacado arriba." />
+      <CabeceraSeccion titulo="Embalses" nota="Los que se muestran en la página Embalses (como mucho 20). El primero sale destacado arriba." />
       <GestionEmbalses />
 
       <CabeceraSeccion titulo="Usuarios" />

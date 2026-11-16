@@ -68,7 +68,7 @@ export default function EmbalseDetalle({ slug }: { slug: string }) {
     <>
       <div className="titulo-pagina">
         <a href="/embalses" className="pequeno">
-          ‹ Hidrología
+          ‹ Embalses
         </a>
         <h1>Embalse de {e.nombre}</h1>
         <p className="suave">

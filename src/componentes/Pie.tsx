@@ -15,8 +15,8 @@ export default function Pie({ red, usuario }: { red: RespuestaRed | null; usuari
             </span>
           </a>
           <p>
-            Red de estaciones meteorológicas de {red?.red.lugar ?? "Villastar"} y alrededores: el tiempo en directo, la previsión, el radar, el satélite y
-            los embalses.
+            Red de estaciones meteorológicas de {red?.red.lugar ?? "Villastar"} y alrededores: el tiempo en directo, la previsión, el radar, el satélite, el
+            río y los embalses.
           </p>
           {red && (
             <p className="pie-estado">
@@ -39,7 +39,11 @@ export default function Pie({ red, usuario }: { red: RespuestaRed | null; usuari
             <h3>Seguimiento</h3>
             <a href="/radar">Radar</a>
             <a href="/satelite">Satélite</a>
-            <a href="/embalses">Hidrología</a>
+          </div>
+          <div>
+            <h3>Hidrología</h3>
+            <a href="/rios">Ríos</a>
+            <a href="/embalses">Embalses</a>
           </div>
           <div>
             <h3>Meteostar</h3>

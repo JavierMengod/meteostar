@@ -52,6 +52,7 @@ export interface Ruta {
     | "dias"
     | "radar"
     | "satelite"
+    | "rios"
     | "embalses"
     | "embalse"
     | "fuentes"
@@ -77,6 +78,7 @@ export function leerRuta(): Ruta {
     "/prevision/14-dias": "dias",
     "/radar": "radar",
     "/satelite": "satelite",
+    "/rios": "rios",
     "/embalses": "embalses",
     "/fuentes": "fuentes",
     "/entrar": "entrar",

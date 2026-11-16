@@ -10,6 +10,7 @@ import EditorEstacion from "./paginas/EditorEstacion";
 import EmbalseDetalle from "./paginas/EmbalseDetalle";
 import Fuentes from "./paginas/Fuentes";
 import Embalses from "./paginas/Embalses";
+import Rios from "./paginas/Rios";
 import Estacion from "./paginas/Estacion";
 import { Dias, PorHoras, type OpcionLugar } from "./paginas/Prevision";
 import Red from "./paginas/Red";
@@ -58,6 +59,9 @@ export default function App() {
       break;
     case "satelite":
       pagina = red ? <Satelite red={red} /> : <Cargando />;
+      break;
+    case "rios":
+      pagina = <Rios />;
       break;
     case "embalses":
       pagina = <Embalses />;
