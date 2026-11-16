@@ -39,7 +39,7 @@ export default function Pie({ red, usuario }: { red: RespuestaRed | null; usuari
             <h3>Seguimiento</h3>
             <a href="/radar">Radar</a>
             <a href="/satelite">Satélite</a>
-            <a href="/embalses">Embalses</a>
+            <a href="/embalses">Hidrología</a>
           </div>
           <div>
             <h3>Meteostar</h3>

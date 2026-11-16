@@ -147,10 +147,10 @@ export default function Red({ red, prevision }: { red: RespuestaRed | null; prev
         />
         <Acceso
           href="/embalses"
-          titulo="Embalses"
-          texto="Cuánta agua guardan los embalses de Teruel y del Turia, su evolución y sus máximos históricos"
+          titulo="Hidrología"
+          texto="El caudal del Turia en Villastar con su previsión, y cuánta agua guardan los embalses de Teruel y del Turia"
           icono="agua"
-          enlaces={[["/embalses", "Ver embalses"]]}
+          enlaces={[["/embalses", "Río y embalses"]]}
         />
       </div>
     </>

@@ -175,9 +175,10 @@ export default function Embalses() {
   return (
     <>
       <section className="cabecera-embalses">
-        <h1>Embalses</h1>
+        <h1>Hidrología</h1>
         <p className="suave">
-          Boletín semanal del MITECO{datos.fecha && ` del ${fechaCompleta(datos.fecha)}`}. Se actualiza una vez por semana.
+          El río Turia en Villastar y los embalses de la zona. Embalses: boletín semanal del MITECO
+          {datos.fecha && ` del ${fechaCompleta(datos.fecha)}`}.
         </p>
       </section>
 

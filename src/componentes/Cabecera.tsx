@@ -91,7 +91,7 @@ export default function Cabecera({ ruta, estaciones }: { ruta: Ruta; estaciones:
         { href: "/satelite", nombre: "Satélite", detalle: "Nubes vistas desde el espacio", activo: (r) => r.pagina === "satelite" },
       ],
     },
-    { href: "/embalses", nombre: "Embalses", activo: (r) => r.pagina === "embalses" || r.pagina === "embalse" },
+    { href: "/embalses", nombre: "Hidrología", activo: (r) => r.pagina === "embalses" || r.pagina === "embalse" },
   ];
 
   const usuario = sesion.usuario;
