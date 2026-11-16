@@ -141,6 +141,29 @@ function Destacado({ e }: { e: Embalse }) {
   );
 }
 
+/** Aforos de río por cuenca. Sus datos en tiempo real solo se publican en la web del SAIH, así que se enlazan. */
+const AFOROS: Record<string, { nombre: string; detalle: string; url: string; fuente: string }[]> = {
+  Júcar: [
+    {
+      nombre: "Caudal del Turia en Teruel",
+      detalle: "Aforo 08015, el más cercano a Villastar (aguas arriba). También el del Alfambra en Teruel (08027), justo antes de unirse al Guadalaviar.",
+      url: "https://saih.chj.es/",
+      fuente: "SAIH Júcar",
+    },
+  ],
+};
+
+function Aforo({ a }: { a: (typeof AFOROS)[string][number] }) {
+  return (
+    <a href={a.url} target="_blank" rel="noreferrer" className="tarjeta tarjeta-aforo enlace">
+      <small className="mono">{a.fuente.toUpperCase()} · EN TIEMPO REAL</small>
+      <h3>{a.nombre}</h3>
+      <p className="suave pequeno">{a.detalle}</p>
+      <span className="ver-grafica">Consultar en la web del {a.fuente} ↗</span>
+    </a>
+  );
+}
+
 export default function Embalses() {
   const { datos, error } = usePeticion<RespuestaEmbalses>("/api/embalses", 30 * 60_000);
   if (!datos) return <Cargando error={error} />;
@@ -173,6 +196,7 @@ export default function Embalses() {
                 .map((e) => (
                   <TarjetaEmbalse key={e.slug} e={e} />
                 ))}
+              {AFOROS[c]?.map((a) => <Aforo key={a.nombre} a={a} />)}
             </div>
           </div>
         );
