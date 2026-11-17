@@ -157,4 +157,11 @@ describe("estado de los datos de un aforo", () => {
     expect(s).toMatchObject({ estado: "sin-datos", aviso: -1, textoAviso: null, normal: null, pastilla: "Sin datos", color: "#9ca3af" });
     expect(situacionAforo({ ultimo: { t: ahora, caudal: null, nivel: 0 }, umbrales: [], normalHoy: null }, ahora).pastilla).toBe("Sin agua");
   });
+
+  it("un barranco seco es lo normal, aunque lleve horas sin publicar", () => {
+    const tornos = { rio: "Barranco de Tornos", nombre: "Barranco de Tornos", umbrales: [], normalHoy: null };
+    const s = situacionAforo({ ...tornos, ultimo: { t: ahora - 18 * 3600, caudal: null, nivel: -0.05 } }, ahora);
+    expect(s).toMatchObject({ estado: "ok", barrancoSeco: true, pastilla: "Seco" });
+    expect(situacionAforo({ ...tornos, ultimo: { t: ahora, caudal: null, nivel: 0.4 } }, ahora).pastilla).toBe("Lleva agua");
+  });
 });

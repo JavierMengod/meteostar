@@ -30,6 +30,9 @@ export function nivelAviso(caudal: number | null, umbrales: number[]): number {
 /** «Río Turia», pero «Barranco de Tornos» o «Río Seco» tal cual. */
 export const nombreDeRio = (rio: string) => (/^(r[ií]o|barranco|rambla|arroyo)\b/i.test(rio) ? rio : `Río ${rio}`);
 
+/** Barrancos y ramblas: cauces que pasan casi todo el año secos y solo llevan agua con lluvias fuertes. */
+export const esBarranco = (a: Pick<Aforo, "rio" | "nombre">) => /^(barranco|rambla)s?\b/i.test(a.rio) || /^(barranco|rambla)s?\b/i.test(a.nombre);
+
 /** Horas sin lecturas a partir de las que el dato se considera antiguo */
 export const HORAS_ANTIGUO = 6;
 export const COLOR_SIN_DATOS = "#9ca3af";
@@ -50,8 +53,11 @@ export function estadoDatos(a: Pick<Aforo, "ultimo">, ahora = Date.now() / 1000)
 }
 
 /** Situación de un aforo: estado de los datos, aviso oficial (si lo hay) y cómo va frente a lo normal de la época. */
-export function situacionAforo(a: Pick<Aforo, "ultimo" | "umbrales" | "normalHoy">, ahora = Date.now() / 1000) {
-  const { estado, sinAgua } = estadoDatos(a, ahora);
+export function situacionAforo(a: Pick<Aforo, "ultimo" | "umbrales" | "normalHoy"> & Partial<Pick<Aforo, "rio" | "nombre">>, ahora = Date.now() / 1000) {
+  const { estado: estadoBruto, sinAgua } = estadoDatos(a, ahora);
+  const barranco = !!a.rio && esBarranco({ rio: a.rio, nombre: a.nombre ?? "" });
+  // Un barranco seco puede pasar horas sin publicar (no cambia nada): no se trata como dato antiguo
+  const estado = barranco && sinAgua && estadoBruto === "antiguo" ? "ok" : estadoBruto;
   const caudal = a.ultimo?.caudal ?? null;
   const valido = estado !== "sin-datos";
   const aviso = valido ? nivelAviso(caudal, a.umbrales) : -1;
@@ -61,12 +67,14 @@ export function situacionAforo(a: Pick<Aforo, "ultimo" | "umbrales" | "normalHoy
     caudal,
     estado,
     sinAgua,
+    /** Barranco o rambla seco: su estado habitual */
+    barrancoSeco: barranco && sinAgua && estado !== "sin-datos",
     aviso,
     textoAviso: aviso >= 0 ? NOMBRES_AVISO[aviso] : valido && a.umbrales.length ? "Sin aviso" : null,
     siguienteAviso: valido && siguiente !== undefined ? `${NOMBRES_AVISO[aviso + 1] ?? "Aviso"} a partir de ${n(siguiente, 0)} m³/s` : null,
     normal,
     /** Texto corto del estado para las tarjetas y la lista */
-    pastilla: estado === "sin-datos" ? "Sin datos" : sinAgua ? "Sin agua" : (normal?.corto ?? null),
+    pastilla: estado === "sin-datos" ? "Sin datos" : barranco && sinAgua ? "Seco" : sinAgua ? "Sin agua" : barranco ? "Lleva agua" : (normal?.corto ?? null),
     /** Color para el mapa y las tarjetas: aviso, sin datos, sin agua o cómo va frente a lo normal */
     color:
       aviso >= 0

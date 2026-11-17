@@ -92,16 +92,23 @@ export default function AforoAhora({ a }: { a: DetalleAforo }) {
         <div>
           <small className="mono">{soloNivel ? "NIVEL MEDIDO" : "CAUDAL MEDIDO"}</small>
           <p className="numero-grande">
-            {soloNivel ? n(a.ultimo?.nivel ?? null, 2) : s.caudal === null ? "—" : n(s.caudal, 2)}
+            {soloNivel ? n(a.ultimo?.nivel == null ? null : Math.max(0, a.ultimo.nivel), 2) : s.caudal === null ? "—" : n(s.caudal, 2)}
             <sup>{unidad}</sup>
           </p>
           {soloNivel && <p className="suave pequeno">Este aforo solo publica el nivel del agua, no el caudal.</p>}
-          {s.sinAgua && (
+          {s.barrancoSeco ? (
             <p className="sin-agua">
-              {soloNivel && (a.ultimo?.nivel ?? 0) < 0
-                ? "Sin agua: el nivel está por debajo del cero de la escala, el cauce está seco."
-                : "Sin agua: el cauce está seco o casi seco."}
+              Seco, que es lo normal: un barranco solo lleva agua cuando llueve con fuerza.
+              {soloNivel && (a.ultimo?.nivel ?? 0) < 0 && " El nivel está por debajo del cero de la escala."}
             </p>
+          ) : (
+            s.sinAgua && (
+              <p className="sin-agua">
+                {soloNivel && (a.ultimo?.nivel ?? 0) < 0
+                  ? "Sin agua: el nivel está por debajo del cero de la escala, el cauce está seco."
+                  : "Sin agua: el cauce está seco o casi seco."}
+              </p>
+            )
           )}
           {t && <span className={`variacion ${t.clase}`}>{`${t.flecha} ${t.texto}`}</span>}
           {s.normal && a.normalHoy && (

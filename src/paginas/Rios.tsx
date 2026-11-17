@@ -7,7 +7,7 @@ import BotonSeguir from "../componentes/BotonSeguir";
 import { Cargando, CabeceraSeccion } from "../componentes/Piezas";
 import { usePeticion, useSesion } from "../datos";
 import { hace, n } from "../formato";
-import { COLOR_SIN_AGUA, COLOR_SIN_DATOS, COLORES_NIVEL, nombreDeRio, situacionAforo, textoTendencia } from "../rios";
+import { COLOR_SIN_AGUA, COLOR_SIN_DATOS, COLORES_NIVEL, esBarranco, nombreDeRio, situacionAforo, textoTendencia } from "../rios";
 import { useSeguidos } from "../seguidos";
 
 const Mapa = lazy(() => import("../componentes/Mapa"));
@@ -121,7 +121,6 @@ function FilaRio({ a, seg }: { a: Aforo; seg: Seguidos }) {
 }
 
 /** Barrancos y ramblas van en su propio grupo, aparte de los ríos de cada cuenca. */
-const esBarranco = (a: Aforo) => /^(barranco|rambla)s?\b/i.test(a.rio) || /^(barranco|rambla)s?\b/i.test(a.nombre);
 const BARRANCOS = "Barrancos y ramblas";
 
 const quitarAcentos = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
