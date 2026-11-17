@@ -5,7 +5,7 @@ import { lazy, Suspense } from "react";
 import type { Embalse, RespuestaEmbalses } from "../../shared/tipos";
 import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
 import BotonSeguir from "../componentes/BotonSeguir";
-import { usePeticion } from "../datos";
+import { usePeticion, useSesion } from "../datos";
 import { useSeguidos } from "../seguidos";
 
 type Seguidos = ReturnType<typeof useSeguidos>;
@@ -155,6 +155,7 @@ function Destacado({ e, seg }: { e: Embalse; seg: Seguidos }) {
 export default function Embalses() {
   const { datos, error } = usePeticion<RespuestaEmbalses>("/api/embalses", 30 * 60_000);
   const seg = useSeguidos("embalse", datos?.porDefecto ?? []);
+  const admin = useSesion().usuario?.rol === "admin";
   if (!datos) return <Cargando error={error} />;
   const destacados = seg.destacados.map((slug) => datos.embalses.find((e) => e.slug === slug)).filter((e): e is Embalse => !!e);
   const resto = datos.embalses.filter((e) => !destacados.includes(e));
@@ -180,6 +181,14 @@ export default function Embalses() {
             : "Pulsa ☆ en cualquier embalse para tenerlo arriba."
           : "Entra en tu cuenta para elegir los embalses que ves arriba."}
       </p>
+      {admin && (
+        <p className="anadir-admin">
+          <a className="boton-secundario" href="/admin#embalses">
+            + Añadir embalse
+          </a>
+          <small className="suave">Solo lo ves tú, como administrador.</small>
+        </p>
+      )}
 
       {cuencas.map((c) => {
         const r = rios(c);

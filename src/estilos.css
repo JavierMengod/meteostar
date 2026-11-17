@@ -3797,3 +3797,19 @@ h3 {
     display: none;
   }
 }
+
+.anadir-admin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.anadir-admin a {
+  text-decoration: none;
+}
+
+/* Que las secciones enlazadas no queden tapadas por la cabecera fija */
+.cabecera-seccion {
+  scroll-margin-top: 80px;
+}

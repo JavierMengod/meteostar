@@ -52,10 +52,10 @@ export default function Admin() {
       <CabeceraSeccion titulo="Estaciones particulares" />
       <div className="tarjeta">{particulares.length ? particulares.map((e) => <FilaEstacionPropia key={e.id} e={e} ahora={ahora} />) : <p className="vacio">Ninguna.</p>}</div>
 
-      <CabeceraSeccion titulo="Embalses" nota="Los que se muestran en la página Embalses (como mucho 20). «Por defecto»: los que ve destacados quien no tiene cuenta." />
+      <CabeceraSeccion id="embalses" titulo="Embalses" nota="Los que se muestran en la página Embalses (como mucho 20). «Por defecto»: los que ve destacados quien no tiene cuenta." />
       <GestionEmbalses />
 
-      <CabeceraSeccion titulo="Ríos" nota="Aforos de cualquier cuenca que gestiona el Estado. «Por defecto»: los que ve destacados quien no tiene cuenta." />
+      <CabeceraSeccion id="rios" titulo="Ríos" nota="Aforos de cualquier cuenca que gestiona el Estado. «Por defecto»: los que ve destacados quien no tiene cuenta." />
       <GestionRios />
 
       <CabeceraSeccion titulo="Usuarios" />
@@ -156,6 +156,14 @@ function GestionEmbalses() {
   const [busca, setBusca] = useState("");
   const [error, setError] = useState<string | null>(null);
   const lista = elegidos?.embalses ?? [];
+
+  // Si se llega desde «+ Añadir embalse» de la página de embalses, se abre el buscador y se baja hasta él
+  useEffect(() => {
+    if (location.hash !== "#embalses") return;
+    abrirCatalogo();
+    setTimeout(() => document.getElementById("embalses")?.scrollIntoView({ behavior: "smooth" }), 300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const abrirCatalogo = async () => {
     setError(null);

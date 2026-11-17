@@ -5,7 +5,7 @@ import { lazy, Suspense, useMemo, useState } from "react";
 import type { Aforo, RespuestaAforos } from "../../shared/tipos";
 import BotonSeguir from "../componentes/BotonSeguir";
 import { Cargando, CabeceraSeccion } from "../componentes/Piezas";
-import { usePeticion } from "../datos";
+import { usePeticion, useSesion } from "../datos";
 import { hace, n } from "../formato";
 import { COLORES_NIVEL, situacionAforo, textoTendencia } from "../rios";
 import { useSeguidos } from "../seguidos";
@@ -122,6 +122,7 @@ const quitarAcentos = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").
 export default function Rios() {
   const { datos, error } = usePeticion<RespuestaAforos>("/api/aforos", 5 * 60_000);
   const seg = useSeguidos("rio", datos?.porDefecto ?? []);
+  const admin = useSesion().usuario?.rol === "admin";
   const [busca, setBusca] = useState("");
   const [cuenca, setCuenca] = useState("");
   const aforos = datos?.aforos ?? [];
@@ -163,6 +164,14 @@ export default function Rios() {
       )}
 
       <CabeceraSeccion titulo="Todos los ríos" nota={`${aforos.length} ${aforos.length === 1 ? "aforo" : "aforos"}`} />
+      {admin && (
+        <p className="anadir-admin">
+          <a className="boton-secundario" href="/admin#rios">
+            + Añadir río
+          </a>
+          <small className="suave">Solo lo ves tú, como administrador: cualquier aforo de las cuencas del Estado.</small>
+        </p>
+      )}
       {aforos.length > 4 && (
         <div className="filtros-rios">
           <input type="search" value={busca} placeholder="Buscar un río o un lugar…" onChange={(e) => setBusca(e.target.value)} aria-label="Buscar un río" />

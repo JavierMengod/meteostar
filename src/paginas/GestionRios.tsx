@@ -1,5 +1,5 @@
 // Administración de los ríos (aforos) que se muestran: añadir del catálogo del Observatorio del Agua, editar, ordenar y quitar.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Aforo, AforoCatalogo, RespuestaAforos, RespuestaEmbalses } from "../../shared/tipos";
 import { enviar, usePeticion } from "../datos";
 import { n } from "../formato";
@@ -54,6 +54,14 @@ export default function GestionRios() {
   const [ocupado, setOcupado] = useState(false);
   const lista = datos?.aforos ?? [];
   const porDefecto = datos?.porDefecto ?? [];
+
+  // Si se llega desde «+ Añadir río» de la página de ríos, se abre el buscador y se baja hasta él
+  useEffect(() => {
+    if (location.hash !== "#rios") return;
+    abrirCatalogo();
+    setTimeout(() => document.getElementById("rios")?.scrollIntoView({ behavior: "smooth" }), 300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const abrirCatalogo = async () => {
     setError(null);
