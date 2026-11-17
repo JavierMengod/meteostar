@@ -36,17 +36,11 @@ export const MESES_HIDROLOGICOS: [number, string][] = [
 export const nombreAnioHidrologico = (anio: number) =>
   `${anio}-${String((anio + 1) % 100).padStart(2, "0")}`;
 
-/** Cómo va un caudal respecto a los percentiles de su época. */
-export function comparaNormal(
-  caudal: number,
-  p: [number, number, number, number, number],
-): { texto: string; clase: string } {
-  if (caudal < p[0])
-    return { texto: "Muy por debajo de lo normal", clase: "baja" };
-  if (caudal < p[1]) return { texto: "Por debajo de lo normal", clase: "baja" };
-  if (caudal <= p[3])
-    return { texto: "Normal para la época", clase: "estable" };
-  if (caudal <= p[4])
-    return { texto: "Por encima de lo normal", clase: "sube" };
-  return { texto: "Muy por encima de lo normal", clase: "sube" };
+/** Cómo va un caudal respecto a los percentiles de su época: nivel de -2 (muy bajo) a 2 (muy alto). */
+export function comparaNormal(caudal: number, p: [number, number, number, number, number]): { texto: string; corto: string; clase: string; nivel: number } {
+  if (caudal < p[0]) return { texto: "Muy por debajo de lo normal", corto: "Muy bajo", clase: "baja", nivel: -2 };
+  if (caudal < p[1]) return { texto: "Por debajo de lo normal", corto: "Bajo", clase: "baja", nivel: -1 };
+  if (caudal <= p[3]) return { texto: "Normal para la época", corto: "Normal", clase: "estable", nivel: 0 };
+  if (caudal <= p[4]) return { texto: "Por encima de lo normal", corto: "Alto", clase: "sube", nivel: 1 };
+  return { texto: "Muy por encima de lo normal", corto: "Muy alto", clase: "sube", nivel: 2 };
 }

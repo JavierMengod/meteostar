@@ -6,6 +6,7 @@ import { enviar, navegar, usePeticion, useSesion } from "../datos";
 import { fechaCorta, fechaDe } from "../formato";
 import { Campo } from "./Acceso";
 import { FilaEstacionPropia } from "./Cuenta";
+import GestionRios from "./GestionRios";
 
 interface ResumenAdmin {
   usuarios: { id: number; nombre: string; email: string; rol: string; creado: number; estaciones: number }[];
@@ -53,6 +54,9 @@ export default function Admin() {
 
       <CabeceraSeccion titulo="Embalses" nota="Los que se muestran en la página Embalses (como mucho 20). El primero sale destacado arriba." />
       <GestionEmbalses />
+
+      <CabeceraSeccion titulo="Ríos" nota="Aforos que se muestran en la página Ríos (como mucho 20), de cualquier cuenca de España" />
+      <GestionRios />
 
       <CabeceraSeccion titulo="Usuarios" />
       <div className="tarjeta tabla-simple">

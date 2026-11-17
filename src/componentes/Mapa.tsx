@@ -20,13 +20,13 @@ export interface PuntoMapa {
 
 const escapar = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-export default function Mapa({ puntos, alto = 380 }: { puntos: PuntoMapa[]; alto?: number }) {
+export default function Mapa({ puntos, alto = 380, margen = 0.25 }: { puntos: PuntoMapa[]; alto?: number; /** Margen alrededor de los puntos (fracción) */ margen?: number }) {
   if (!puntos.length) return null;
   const limites = L.latLngBounds(puntos.map((p) => [p.lat, p.lon]));
   return (
     <div className="mapa" style={{ height: alto }}>
       <MapContainer
-        {...(puntos.length > 1 ? { bounds: limites.pad(0.25) } : { center: [puntos[0].lat, puntos[0].lon] as [number, number], zoom: 13 })}
+        {...(puntos.length > 1 ? { bounds: limites.pad(margen) } : { center: [puntos[0].lat, puntos[0].lon] as [number, number], zoom: 13 })}
         maxZoom={15}
         scrollWheelZoom={false}
         style={{ height: "100%", width: "100%" }}

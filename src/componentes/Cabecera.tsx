@@ -94,7 +94,7 @@ export default function Cabecera({ ruta, estaciones }: { ruta: Ruta; estaciones:
     {
       nombre: "Hidrología",
       enlaces: [
-        { href: "/rios", nombre: "Ríos", detalle: "Caudal del Turia y su previsión", activo: (r) => r.pagina === "rios" },
+        { href: "/rios", nombre: "Ríos", detalle: "Caudal medido y previsión", activo: (r) => r.pagina === "rios" || r.pagina === "rio" },
         { href: "/embalses", nombre: "Embalses", detalle: "Cuánta agua guardan", activo: (r) => r.pagina === "embalses" || r.pagina === "embalse" },
       ],
     },

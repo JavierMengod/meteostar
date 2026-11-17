@@ -11,6 +11,7 @@ import EmbalseDetalle from "./paginas/EmbalseDetalle";
 import Fuentes from "./paginas/Fuentes";
 import Embalses from "./paginas/Embalses";
 import Rios from "./paginas/Rios";
+import RioDetalle from "./paginas/RioDetalle";
 import Estacion from "./paginas/Estacion";
 import { Dias, PorHoras, type OpcionLugar } from "./paginas/Prevision";
 import Red from "./paginas/Red";
@@ -62,6 +63,9 @@ export default function App() {
       break;
     case "rios":
       pagina = <Rios />;
+      break;
+    case "rio":
+      pagina = <RioDetalle key={ruta.param} slug={ruta.param!} />;
       break;
     case "embalses":
       pagina = <Embalses />;

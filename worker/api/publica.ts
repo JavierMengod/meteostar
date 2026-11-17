@@ -21,9 +21,8 @@ import { datosEstacion, estacionesPublicas, estacionPorSlug, estacionPorToken, t
 import { fechaAnterior, fechaLocal, inicioDia } from "../fechas";
 import { detalleEmbalse, estadoEmbalses } from "../embalses";
 import { obtenerPrevision } from "../prevision";
-import { estadoRio } from "../rio";
-import { estadoAforos } from "../aforos";
-import { anioAforo, resumenAforo } from "../historico-aforos";
+import { detalleAforo, estadoAforos } from "../aforos";
+import { anioAforo, previsionAforo, resumenAforo } from "../historico-aforos";
 import { radar, teselaRadar } from "../radar";
 import { CAPAS_SATELITE, imagenSatelite, PASOS, satelite, type CapaSatelite } from "../seguimiento";
 
@@ -198,37 +197,56 @@ app.get("/embalses", async (c) => {
   }
 });
 
+// ----- Ríos (aforos configurados en Administración) -----
+
+const slugValido = (s: string) => /^[a-z0-9-]{1,80}$/.test(s);
+
 app.get("/aforos", async (c) => {
   try {
     c.header("Cache-Control", "public, max-age=300");
-    return c.json(await estadoAforos(c.env));
+    return c.json({ aforos: await estadoAforos(c.env) });
   } catch (e) {
     console.error(e);
     return c.json({ error: "aforos no disponibles" }, 502);
   }
 });
 
-app.get("/aforos/:id/historico", async (c) => {
-  const r = await resumenAforo(c.env, c.req.param("id"));
+app.get("/aforos/:slug", async (c) => {
+  const slug = c.req.param("slug");
+  if (!slugValido(slug)) return c.json({ error: "aforo no válido" }, 400);
+  const r = await detalleAforo(c.env, slug);
+  if (!r) return c.json({ error: "aforo no encontrado" }, 404);
+  c.header("Cache-Control", "public, max-age=300");
+  return c.json(r);
+});
+
+app.get("/aforos/:slug/historico", async (c) => {
+  const slug = c.req.param("slug");
+  if (!slugValido(slug)) return c.json({ error: "aforo no válido" }, 400);
+  const r = await resumenAforo(c.env, slug);
   if (!r) return c.json({ error: "aforo no encontrado" }, 404);
   c.header("Cache-Control", "public, max-age=3600");
   return c.json(r);
 });
 
-app.get("/aforos/:id/anio/:anio", async (c) => {
+app.get("/aforos/:slug/anio/:anio", async (c) => {
   const anio = Number(c.req.param("anio"));
-  if (!Number.isInteger(anio) || anio < 1900 || anio > 2100) return c.json({ error: "año no válido" }, 400);
+  if (!slugValido(c.req.param("slug")) || !Number.isInteger(anio) || anio < 1900 || anio > 2100) return c.json({ error: "petición no válida" }, 400);
   c.header("Cache-Control", "public, max-age=3600");
-  return c.json(await anioAforo(c.env, c.req.param("id"), anio));
+  return c.json(await anioAforo(c.env, c.req.param("slug"), anio));
 });
 
-app.get("/rio", async (c) => {
+app.get("/aforos/:slug/prevision", async (c) => {
+  const slug = c.req.param("slug");
+  if (!slugValido(slug)) return c.json({ error: "aforo no válido" }, 400);
   try {
+    const r = await previsionAforo(c.env, c.executionCtx, slug);
+    if (!r) return c.json({ error: "aforo no encontrado" }, 404);
     c.header("Cache-Control", "public, max-age=1800");
-    return c.json(await estadoRio(c.executionCtx));
+    return c.json(r);
   } catch (e) {
     console.error(e);
-    return c.json({ error: "caudal no disponible" }, 502);
+    return c.json({ error: "previsión no disponible" }, 502);
   }
 });
 

@@ -7,10 +7,11 @@ export function usePeticion<T>(url: string | null, intervalo = 60_000) {
   const [datos, setDatos] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const cargar = useCallback(async () => {
+  /** fresco: sin la caché del navegador (tras un cambio hecho por el usuario) */
+  const cargar = useCallback(async (fresco = false) => {
     if (!url) return;
     try {
-      const r = await fetch(url);
+      const r = await fetch(url, fresco ? { cache: "reload" } : undefined);
       if (!r.ok) throw new Error(r.status === 404 ? "no encontrado" : `HTTP ${r.status}`);
       setDatos(await r.json());
       setError(null);
@@ -23,11 +24,11 @@ export function usePeticion<T>(url: string | null, intervalo = 60_000) {
     setDatos(null);
     cargar();
     if (!intervalo) return;
-    const id = setInterval(cargar, intervalo);
+    const id = setInterval(() => cargar(), intervalo);
     return () => clearInterval(id);
   }, [cargar, intervalo]);
 
-  return { datos, error, recargar: cargar };
+  return { datos, error, recargar: () => cargar(true) };
 }
 
 /** Envía JSON a la API. Devuelve la respuesta o lanza un Error con el mensaje del servidor. */
@@ -53,6 +54,7 @@ export interface Ruta {
     | "radar"
     | "satelite"
     | "rios"
+    | "rio"
     | "embalses"
     | "embalse"
     | "fuentes"
@@ -90,6 +92,7 @@ export function leerRuta(): Ruta {
   if (simples[p]) return { pagina: simples[p], query };
   if (partes[0] === "estacion" && partes[1]) return { pagina: "estacion", param: partes[1], query };
   if (partes[0] === "embalses" && partes[1]) return { pagina: "embalse", param: partes[1], query };
+  if (partes[0] === "rios" && partes[1]) return { pagina: "rio", param: partes[1], query };
   if (partes[0] === "cuenta" && partes[1] === "estacion" && partes[2]) return { pagina: "editar-estacion", param: partes[2], query };
   return { pagina: "no-encontrada", query };
 }

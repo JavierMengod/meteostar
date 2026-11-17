@@ -374,55 +374,79 @@ export interface DetalleEmbalse extends Embalse {
   mediaSemana: { volumen: number; porcentaje: number; anios: number } | null;
 }
 
-// ===== Río (caudal estimado por GloFAS) =====
+// ===== Ríos: aforos medidos (Observatorio del Agua, MITECO), histórico (Anuario de Aforos) y previsión (GloFAS) =====
 
-export interface DiaRio {
-  fecha: string;
-  /** Caudal estimado (m³/s); en la previsión, el escenario central */
-  caudal: number | null;
-  /** Rango de los escenarios de la previsión (null en los días pasados) */
-  minimo: number | null;
-  maximo: number | null;
-  /** Mediana de esta época del año en el histórico */
-  normal: number | null;
-  /** Percentil 90 de esta época: por encima, el río va alto */
-  alto: number | null;
-  prevision: boolean;
-}
-
-export interface RespuestaRio {
-  lat: number;
-  lon: number;
-  /** Último día ya pasado con dato */
-  actual: DiaRio | null;
-  dias: DiaRio[];
-  aviso: { nivel: "posible" | "probable"; fecha: string; caudal: number } | null;
-  /** Primer año del histórico usado para lo normal */
-  desde: string | null;
-}
-
-// ===== Aforos medidos (Observatorio del Agua, MITECO) =====
-
-export interface Aforo {
-  id: string;
+/** Aforo de río configurado en Meteostar. */
+export interface AforoConfig {
+  slug: string;
   nombre: string;
   rio: string;
-  /** Código de la estación de aforo de la confederación */
-  codigo: string;
+  /** Código de la estación de aforo (ROEA) */
+  codigo: string | null;
+  confederacion: string | null;
+  lat: number;
+  lon: number;
+  /** Embalse que regula el río aguas arriba (slug de la sección de embalses) */
+  embalse: string | null;
+  /** Año desde el que el río está regulado por ese embalse */
+  reguladoDesde: number | null;
+}
+
+/** Tarjeta de un aforo: última lectura y cómo va. */
+export interface Aforo extends AforoConfig {
   ultimo: { t: number; caudal: number | null; nivel: number | null } | null;
   /** Variación del caudal en las últimas 3 horas (m³/s) */
   tendencia: number | null;
   /** Umbrales oficiales de aviso (m³/s), de menor a mayor */
   umbrales: number[];
-  /** [segundos, caudal m³/s, nivel m] */
-  serie: [number, number | null, number | null][];
+  /** Percentiles 10, 25, 50, 75 y 90 de esta época del año (si hay histórico) */
+  normalHoy: [number, number, number, number, number] | null;
+  /** Caudal de las últimas 48 h, una lectura por hora: [segundos, m³/s] */
+  mini: [number, number][];
 }
 
 export interface RespuestaAforos {
   aforos: Aforo[];
 }
 
-// ===== Histórico de aforos (Anuario de Aforos + medias de las lecturas) =====
+/** Página de un aforo. */
+export interface DetalleAforo extends Aforo {
+  /** Últimos 30 días: [segundos, caudal m³/s, nivel m] */
+  serie: [number, number | null, number | null][];
+  /** Lluvia diaria en la estación de Meteostar más cercana */
+  lluvia: { slug: string; nombre: string; km: number; dias: [string, number | null][] } | null;
+  tieneHistorico: boolean;
+}
+
+/** Entrada del catálogo de aforos del Observatorio (para añadirlos). */
+export interface AforoCatalogo {
+  elemento: string;
+  nombre: string;
+  demarcacion: string;
+  lat: number;
+  lon: number;
+  elegido: boolean;
+}
+
+export interface DiaRio {
+  fecha: string;
+  /** Caudal (m³/s); en la previsión, el escenario central */
+  caudal: number | null;
+  /** Escenarios centrales de la previsión: percentiles 25 y 75 (null en los días pasados) */
+  minimo: number | null;
+  maximo: number | null;
+  /** Lo normal para la época y lo habitualmente alto (p90) */
+  normal: number | null;
+  alto: number | null;
+  prevision: boolean;
+}
+
+export interface RespuestaRio {
+  /** true: cifras corregidas con el histórico del aforo; false: solo sirve la tendencia */
+  corregida: boolean;
+  dias: DiaRio[];
+  aviso: { nivel: "posible" | "probable"; fecha: string; caudal: number } | null;
+}
 
 export interface AnioAforo {
   /** Año hidrológico: 2021 = de octubre de 2021 a septiembre de 2022 */
@@ -440,6 +464,14 @@ export interface CrecidaAforo {
   caudal: number;
 }
 
+/** Corrección del modelo: cuantiles del modelo y del aforo para cada estación del año (dic-feb, mar-may, jun-ago, sep-nov). */
+export interface CorreccionModelo {
+  modelo: number[][];
+  aforo: number[][];
+  lat: number;
+  lon: number;
+}
+
 export interface ResumenAforo {
   estacion: string;
   /** Percentiles 10, 25, 50, 75 y 90 del caudal diario para cada día del año hidrológico (0 = 1 de octubre) */
@@ -455,6 +487,11 @@ export interface ResumenAforo {
   crecidas: CrecidaAforo[];
   /** Mayores caudales instantáneos */
   puntas: CrecidaAforo[];
+  /** Lo mismo desde que el río está regulado (si lo está) */
+  reguladoDesde: number | null;
+  crecidasRegulado: CrecidaAforo[];
+  puntasRegulado: CrecidaAforo[];
+  correccion: CorreccionModelo | null;
   desde: string | null;
   hasta: string | null;
 }

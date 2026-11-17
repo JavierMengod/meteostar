@@ -1,16 +1,22 @@
 // Genera el SQL con los datos diarios del Anuario de Aforos (MITECO / CEDEX) de las estaciones que usa Meteostar.
-// Uso: node scripts/importar-anuario.mjs <carpeta JUCAR del anuario en CSV> > datos/anuario-aforos.sql
+// Uso: node scripts/importar-anuario.mjs <carpeta de la cuenca> <código>=<slug> [...] > datos/anuario-<cuenca>.sql
+//   p. ej. node scripts/importar-anuario.mjs Anuario/JUCAR 08015=turia-teruel 08027=alfambra-teruel > datos/anuario-aforos.sql
+//   El código es el del aforo (lo muestra Administración › Ríos) y el slug, el del río en Meteostar.
+//   El anuario se descarga de https://www.miteco.gob.es/es/agua/temas/evaluacion-de-los-recursos-hidricos/sistema-informacion-anuario-aforos.html
+//   (base de datos en CSV); cada cuenca va en su carpeta (JUCAR, EBRO…).
 // Después: npx wrangler d1 execute meteostar --file datos/anuario-aforos.sql [--local | --remote]
+// Al día siguiente (o al abrir el histórico del río) se recalculan solos lo normal, los récords y la corrección de la previsión.
 // Fuente: «© Ministerio para la Transición Ecológica y el Reto Demográfico». Anuario de Aforos 2021-22.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Código ROEA de la estación → id en Meteostar */
-const ESTACIONES = { 8015: "turia-teruel", 8027: "alfambra-teruel" };
-
-const carpeta = process.argv[2];
-if (!carpeta) {
-  console.error("Falta la carpeta JUCAR del anuario");
+const [carpeta, ...pares] = process.argv.slice(2);
+/** Código del aforo (sin ceros a la izquierda, como en el anuario) → slug en Meteostar */
+const ESTACIONES = Object.fromEntries(
+  pares.map((p) => p.split("=")).filter(([c, s]) => c && s).map(([c, s]) => [String(Number(c)), s]),
+);
+if (!carpeta || !Object.keys(ESTACIONES).length) {
+  console.error("Uso: node scripts/importar-anuario.mjs <carpeta de la cuenca> <código>=<slug> [...]");
   process.exit(1);
 }
 

@@ -15,6 +15,8 @@ import {
 import { esTema } from "../../shared/temas";
 import { infoConectores } from "../conectores";
 import { catalogo } from "../embalses";
+import { aforosConfigurados, anadirAforo, catalogoAforos, quitarAforo } from "../aforos";
+import { calcularResumen } from "../historico-aforos";
 import { leerEstacion } from "../cron";
 import { ultimaLectura } from "../db";
 import {
@@ -393,6 +395,64 @@ app.put("/admin/embalses/orden", async (c) => {
   const lista = (await cuerpo(c))?.slugs;
   if (!Array.isArray(lista)) return c.json({ error: "Petición no válida" }, 400);
   await c.env.DB.batch(lista.slice(0, 20).map((slug: unknown, i: number) => c.env.DB.prepare("UPDATE embalses SET orden = ? WHERE slug = ?").bind(i + 1, String(slug))));
+  return c.json({ ok: true });
+});
+
+// ----- Ríos (aforos) que se muestran -----
+
+app.get("/admin/aforos/catalogo", async (c) => {
+  try {
+    return c.json(await catalogoAforos(c.env, c.executionCtx));
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "No se ha podido leer el catálogo del Observatorio del Agua" }, 502);
+  }
+});
+
+const anioRegulado = (v: unknown) => {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 1850 && n <= 2100 ? n : null;
+};
+
+app.post("/admin/aforos", async (c) => {
+  const b = await cuerpo(c);
+  const elemento = texto(b?.elemento, 80);
+  const nombre = texto(b?.nombre, 80);
+  const rio = texto(b?.rio, 60);
+  const embalse = texto(b?.embalse, 80) || null;
+  if (!elemento || !nombre || !rio) return c.json({ error: "Faltan el aforo, el nombre o el río" }, 400);
+  if (embalse && !/^[a-z0-9-]+$/.test(embalse)) return c.json({ error: "Embalse no válido" }, 400);
+  if ((await aforosConfigurados(c.env.DB)).length >= 20) return c.json({ error: "Como mucho 20 ríos" }, 400);
+  const r = await anadirAforo(c.env, c.executionCtx, { elemento, nombre, rio, embalse, reguladoDesde: anioRegulado(b?.reguladoDesde) });
+  return "error" in r ? c.json(r, 400) : c.json(r);
+});
+
+app.put("/admin/aforos/:slug", async (c) => {
+  const b = await cuerpo(c);
+  const nombre = texto(b?.nombre, 80);
+  const rio = texto(b?.rio, 60);
+  const embalse = texto(b?.embalse, 80) || null;
+  if (!nombre || !rio) return c.json({ error: "Faltan el nombre o el río" }, 400);
+  if (embalse && !/^[a-z0-9-]+$/.test(embalse)) return c.json({ error: "Embalse no válido" }, 400);
+  await c.env.DB.prepare("UPDATE aforos SET nombre = ?, rio = ?, embalse = ?, regulado_desde = ? WHERE slug = ?")
+    .bind(nombre, rio, embalse, anioRegulado(b?.reguladoDesde), c.req.param("slug"))
+    .run();
+  // Los récords dependen del año de regulación: se recalcula el resumen
+  const a = (await aforosConfigurados(c.env.DB)).find((x) => x.slug === c.req.param("slug"));
+  if (a) c.executionCtx.waitUntil(calcularResumen(c.env.DB, a).catch((e) => console.error(e)));
+  return c.json({ ok: true });
+});
+
+app.delete("/admin/aforos/:slug", async (c) => {
+  await quitarAforo(c.env.DB, c.req.param("slug"));
+  return c.json({ ok: true });
+});
+
+/** Nuevo orden: lista de slugs. */
+app.put("/admin/aforos-orden", async (c) => {
+  const lista = (await cuerpo(c))?.slugs;
+  if (!Array.isArray(lista)) return c.json({ error: "Petición no válida" }, 400);
+  await c.env.DB.batch(lista.slice(0, 20).map((slug: unknown, i: number) => c.env.DB.prepare("UPDATE aforos SET orden = ? WHERE slug = ?").bind(i + 1, String(slug))));
   return c.json({ ok: true });
 });
 

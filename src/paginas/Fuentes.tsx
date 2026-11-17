@@ -59,8 +59,7 @@ export default function Fuentes() {
           cada confederación hidrográfica (provisional, no contrastado).
         </Fuente>
         <Fuente titulo="Aforos de río" enlaces={[["Observatorio del Agua (MITECO)", "https://observatorioagua.miteco.es/hidrologia/"]]}>
-          Caudal y nivel medidos cada 10 minutos en las estaciones de aforo de las confederaciones hidrográficas (Turia y Alfambra en Teruel,
-          Confederación Hidrográfica del Júcar), publicados por el Observatorio del Agua GOTA del Ministerio para la Transición Ecológica.
+          Caudal y nivel medidos cada 10 minutos en las estaciones de aforo de las confederaciones hidrográficas, publicados por el Observatorio del Agua GOTA del Ministerio para la Transición Ecológica.
           Fuente: MITECO. Datos en tiempo real, provisionales y sin validar.
         </Fuente>
         <Fuente

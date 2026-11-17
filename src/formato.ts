@@ -25,7 +25,8 @@ export function hace(segundos: number): string {
   if (segundos < 90) return "hace un momento";
   if (segundos < 3600) return `hace ${Math.round(segundos / 60)} min`;
   if (segundos < 86400) return `hace ${Math.round(segundos / 3600)} h`;
-  return `hace ${Math.round(segundos / 86400)} días`;
+  const dias = Math.round(segundos / 86400);
+  return dias === 1 ? "hace 1 día" : `hace ${dias} días`;
 }
 
 export function nivelUv(uv: number | null): string {
