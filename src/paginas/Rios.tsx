@@ -117,7 +117,11 @@ function FilaRio({ a, seg }: { a: Aforo; seg: Seguidos }) {
   );
 }
 
-const quitarAcentos = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+/** Barrancos y ramblas van en su propio grupo, aparte de los ríos de cada cuenca. */
+const esBarranco = (a: Aforo) => /^(barranco|rambla)s?\b/i.test(a.rio) || /^(barranco|rambla)s?\b/i.test(a.nombre);
+const BARRANCOS = "Barrancos y ramblas";
+
+const quitarAcentos = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 export default function Rios() {
   const { datos, error } = usePeticion<RespuestaAforos>("/api/aforos", 5 * 60_000);
@@ -134,7 +138,10 @@ export default function Rios() {
   if (!datos) return <Cargando error={error} />;
 
   const destacados = seg.destacados.map((slug) => aforos.find((a) => a.slug === slug)).filter((a): a is Aforo => !!a);
-  const porCuenca = cuencas.map((c) => [c, filtrados.filter((a) => (a.confederacion ?? "Otras") === c)] as const).filter(([, l]) => l.length);
+  const porCuenca = [
+    [BARRANCOS, filtrados.filter(esBarranco)] as const,
+    ...cuencas.map((c) => [c, filtrados.filter((a) => !esBarranco(a) && (a.confederacion ?? "Otras") === c)] as const),
+  ].filter(([, l]) => l.length);
 
   return (
     <>
@@ -217,7 +224,7 @@ export default function Rios() {
       {porCuenca.length ? (
         porCuenca.map(([c, lista]) => (
           <section key={c} className="tarjeta lista-rios">
-            <h3 className="titulo-acento">Cuenca del {c}</h3>
+            <h3 className="titulo-acento">{c === BARRANCOS ? c : `Cuenca del ${c}`}</h3>
             {lista.map((a) => (
               <FilaRio key={a.slug} a={a} seg={seg} />
             ))}

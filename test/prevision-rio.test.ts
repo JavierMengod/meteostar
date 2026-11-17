@@ -73,7 +73,7 @@ describe("previsión", () => {
       hoy: "2026-11-17",
       correccion: null,
       normalAforo: null,
-      normalModelo: new Map([["11-18", { normal: 4, alto: 10 }], ["11-19", { normal: 4, alto: 10 }]]),
+      normalModelo: () => ({ normal: 4, alto: 10 }),
       medidos: new Map(),
       ultimoMedido: null,
     });

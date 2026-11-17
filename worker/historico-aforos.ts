@@ -5,7 +5,7 @@ import { anioHidrologico, diaHidrologico } from "../shared/hidrologia";
 import type { AnioAforo, CrecidaAforo, DiaAforo, ResumenAforo, RespuestaRio } from "../shared/tipos";
 import { type FilaAforo, aforoPorSlug, aforosConfigurados, normalDeHoy } from "./aforos";
 import { fechaLocal } from "./fechas";
-import { calcularCorreccion, celdaDelAforo, climatologiaModelo, componerPrevision, historicoModelo, pedirReciente } from "./prevision-rio";
+import { calcularCorreccion, celdaDelAforo, climaModeloCompacto, componerPrevision, historicoModelo, pedirReciente } from "./prevision-rio";
 
 /** Periodo de referencia para «lo normal» (el normal climatológico de la OMM) */
 export const NORMAL_DESDE = 1991;
@@ -47,7 +47,7 @@ const mayoresPuntas = (inst: Instantaneo[]): CrecidaAforo[] =>
     .map((i) => ({ fecha: i.dia ? `${i.mes}-${String(i.dia).padStart(2, "0")}` : i.mes, caudal: r3(i.caudal) }));
 
 /** Calcula el resumen de una estación a partir de sus caudales diarios. */
-export function resumir(filas: Fila[], instantaneos: Instantaneo[], reguladoDesde: number | null = null): Omit<ResumenAforo, "estacion" | "correccion"> {
+export function resumir(filas: Fila[], instantaneos: Instantaneo[], reguladoDesde: number | null = null): Omit<ResumenAforo, "estacion" | "correccion" | "climaModelo" | "modeloCalculado"> {
   // Lo normal para cada día del año hidrológico (ventana de ±7 días para suavizar)
   const porDia: number[][] = Array.from({ length: 366 }, () => []);
   const porMes: number[][] = Array.from({ length: 12 }, () => []);
@@ -121,18 +121,27 @@ export async function calcularResumen(db: D1Database, a: FilaAforo): Promise<Res
     await db.prepare("SELECT fecha, caudal, fuente FROM aforo_diario WHERE estacion = ? AND caudal IS NOT NULL ORDER BY fecha").bind(a.slug).all<Fila & { fuente: string }>()
   ).results;
   const inst = (await db.prepare("SELECT mes, dia, caudal FROM aforo_max_mensual WHERE estacion = ?").bind(a.slug).all<Instantaneo>()).results;
-  // Corrección del modelo de previsión con los datos validados del anuario
-  let correccion: ResumenAforo["correccion"] = null;
+  // Lo del modelo de previsión (corrección con el anuario o, si no hay, lo normal del propio modelo) no cambia:
+  // se reutiliza el del resumen anterior y solo se rehace una vez al mes
+  const previo = await db.prepare("SELECT datos FROM aforo_resumen WHERE estacion = ?").bind(a.slug).first<{ datos: string }>();
+  const anterior: Partial<ResumenAforo> = previo ? JSON.parse(previo.datos) : {};
   const anuario = filas.filter((f) => f.fuente === "anuario");
-  if (anuario.length > 1000) {
+  let correccion = anterior.correccion ?? null;
+  let climaModelo = anterior.climaModelo ?? null;
+  let modeloCalculado = anterior.modeloCalculado ?? null;
+  const caducado = !modeloCalculado || Date.now() / 1000 - modeloCalculado > 30 * 86400 || (!correccion && anuario.length > 1000);
+  if (caducado) {
     try {
       const celda = await celdaDelAforo(db, a);
-      correccion = calcularCorreccion(anuario, await historicoModelo(celda), celda);
+      const historico = await historicoModelo(celda);
+      correccion = anuario.length > 1000 ? calcularCorreccion(anuario, historico, celda) : null;
+      climaModelo = correccion ? null : climaModeloCompacto(historico, diaHidrologico);
+      modeloCalculado = Math.floor(Date.now() / 1000);
     } catch (e) {
-      console.error("corrección del modelo", a.slug, e);
+      console.error("modelo de previsión", a.slug, e);
     }
   }
-  const resumen: ResumenAforo = { estacion: a.slug, ...resumir(filas, inst, a.regulado_desde), correccion };
+  const resumen: ResumenAforo = { estacion: a.slug, ...resumir(filas, inst, a.regulado_desde), correccion, climaModelo, modeloCalculado };
   await db
     .prepare(
       "INSERT INTO aforo_resumen (estacion, datos, actualizado) VALUES (?, ?, unixepoch()) ON CONFLICT (estacion) DO UPDATE SET datos = excluded.datos, actualizado = excluded.actualizado",
@@ -218,7 +227,10 @@ export async function previsionAforo(env: Env, ctx: Ctx, slug: string): Promise<
           return p ? { normal: p[2], alto: p[4] } : null;
         }
       : null,
-    normalModelo: conHistorico ? null : climatologiaModelo(await historicoModelo(celda)),
+    normalModelo: conHistorico ? null : (fecha) => {
+      const c = resumen?.climaModelo?.[diaHidrologico(fecha)];
+      return c ? { normal: c[0], alto: c[1] } : null;
+    },
     medidos,
     ultimoMedido: ultimo?.caudal ?? null,
   });

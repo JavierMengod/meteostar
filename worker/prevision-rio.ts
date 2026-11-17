@@ -7,7 +7,13 @@ import type { CorreccionModelo, DiaRio, RespuestaRio } from "../shared/tipos";
 import type { FilaAforo } from "./aforos";
 
 const API = "https://flood-api.open-meteo.com/v1/flood";
-const DESDE = "1991-01-01";
+/**
+ * Periodo del histórico del modelo. Open-Meteo cuenta las descargas largas como muchas peticiones, así que se usan
+ * 20 años (suficientes para la corrección y para lo normal) y se guardan un mes.
+ */
+const HIST_DESDE = "2000-01-01";
+const HIST_HASTA = "2019-12-31";
+const UN_MES = 30 * 86400;
 const DIAS_PASADOS = 20;
 const DIAS_PREVISION = 15;
 /** Cuantiles que se guardan para la corrección (0 %, 5 %… 100 %) */
@@ -54,7 +60,7 @@ export async function celdaDelAforo(db: D1Database, a: FilaAforo): Promise<{ lat
     lats.push((centro(a.lat) + dy * 0.05).toFixed(3));
     lons.push((centro(a.lon) + dx * 0.05).toFixed(3));
   }
-  const j = await pedir(`${API}?latitude=${lats}&longitude=${lons}&daily=river_discharge&start_date=2010-01-01&end_date=2019-12-31`, 86400);
+  const j = await pedir(`${API}?latitude=${lats}&longitude=${lons}&daily=river_discharge&start_date=2019-01-01&end_date=2019-12-31`, UN_MES);
   let mejor = { lat: Number(lats[4]), lon: Number(lons[4]), media: -1 };
   (Array.isArray(j) ? j : [j]).forEach((c: any, i: number) => {
     const v: number[] = (c?.daily?.river_discharge ?? []).filter((x: unknown) => typeof x === "number");
@@ -65,10 +71,9 @@ export async function celdaDelAforo(db: D1Database, a: FilaAforo): Promise<{ lat
   return { lat: mejor.lat, lon: mejor.lon };
 }
 
-/** Serie histórica del modelo en la celda (cambia una vez al año; se cachea un día). */
+/** Serie histórica del modelo en la celda (no cambia; se guarda un mes). */
 export async function historicoModelo(celda: { lat: number; lon: number }): Promise<Map<string, number>> {
-  const hasta = `${new Date().getUTCFullYear()}-01-01`;
-  const j = await pedir(`${API}?latitude=${celda.lat}&longitude=${celda.lon}&daily=river_discharge&start_date=${DESDE}&end_date=${hasta}`, 86400);
+  const j = await pedir(`${API}?latitude=${celda.lat}&longitude=${celda.lon}&daily=river_discharge&start_date=${HIST_DESDE}&end_date=${HIST_HASTA}`, UN_MES);
   const m = new Map<string, number>();
   (j?.daily?.time ?? []).forEach((f: string, i: number) => {
     const v = num(j.daily.river_discharge?.[i]);
@@ -127,6 +132,20 @@ export function climatologiaModelo(historico: Map<string, number>): Map<string, 
   return res;
 }
 
+/** Lo normal del modelo por día del año hidrológico (0 = 1 de octubre), para guardarlo en el resumen. */
+export function climaModeloCompacto(historico: Map<string, number>, diaHidrologico: (f: string) => number): ([number, number] | null)[] {
+  const porDia: number[][] = Array.from({ length: 366 }, () => []);
+  for (const [f, v] of historico) {
+    const d = diaHidrologico(f);
+    for (let k = -7; k <= 7; k++) porDia[(d + k + 366) % 366].push(v);
+  }
+  return porDia.map((v) => {
+    if (!v.length) return null;
+    v.sort((a, b) => a - b);
+    return [r2(percentil(v, 0.5)), r2(percentil(v, 0.9))];
+  });
+}
+
 /** Aviso: la previsión central supera lo habitualmente alto → probable; solo 1 de cada 4 escenarios (percentil 75) → posible. */
 export function avisoPrevision(dias: DiaRio[]): RespuestaRio["aviso"] {
   let aviso: RespuestaRio["aviso"] = null;
@@ -146,7 +165,7 @@ export interface EntradaPrevision {
   /** Lo normal del aforo para una fecha (p50 y p90), si hay histórico */
   normalAforo: ((fecha: string) => { normal: number; alto: number } | null) | null;
   /** Lo normal del modelo, si no hay histórico */
-  normalModelo: Map<string, { normal: number; alto: number }> | null;
+  normalModelo: ((fecha: string) => { normal: number; alto: number } | null) | null;
   /** Caudal medio de los días pasados medido en el aforo */
   medidos: Map<string, number>;
   /** Último caudal medido (para enlazar la previsión con la realidad) */
@@ -169,7 +188,7 @@ export function componerPrevision(e: EntradaPrevision): RespuestaRio {
   const factor = corregida && e.ultimoMedido !== null && modeloHoy ? Math.min(5, Math.max(0.2, e.ultimoMedido / modeloHoy)) : 1;
   const dias: DiaRio[] = fechas.map((fecha, i) => {
     const prevision = fecha > e.hoy;
-    const n = e.normalAforo?.(fecha) ?? e.normalModelo?.get(fecha.slice(5)) ?? null;
+    const n = e.normalAforo?.(fecha) ?? e.normalModelo?.(fecha) ?? null;
     const k = prevision ? i - indiceHoy : 0;
     const ajuste = prevision && indiceHoy >= 0 ? 1 + (factor - 1) * Math.max(0, 1 - k / 7) : factor;
     const medido = e.medidos.get(fecha);

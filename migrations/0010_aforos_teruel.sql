@@ -1,0 +1,30 @@
+-- Todos los aforos de la provincia de Teruel que publica el Observatorio del Agua (MITECO).
+-- Provincia comprobada punto a punto; los del Júcar llevan el código del Anuario de Aforos (para su histórico).
+-- INSERT OR IGNORE: si alguno ya se añadió a mano desde Administración, se deja como está.
+INSERT OR IGNORE INTO aforos (slug, nombre, rio, codigo, elemento, confederacion, lat, lon, embalse, regulado_desde, orden, creado) VALUES
+  ('martin-hijar', 'Martín en Híjar', 'Martín', 'ES091_A014', '01a11199-0d8a-76ac-8704-dbd6e33edc78', 'Ebro', 41.1745, -0.4533, NULL, NULL, 10, unixepoch()),
+  ('guadalaviar-tramacastilla', 'Guadalaviar en Tramacastilla', 'Guadalaviar', '08014', '01961577-5955-75da-8dff-4871c167666c', 'Júcar', 40.417, -1.5762, NULL, NULL, 11, unixepoch()),
+  ('alfambra-villalba-alta', 'Alfambra en Villalba Alta', 'Alfambra', '08028', '01961577-598b-7eec-aff3-86743a3c96af', 'Júcar', 40.6144, -0.9757, NULL, NULL, 12, unixepoch()),
+  ('mijares-el-terde', 'Mijares en El Terde', 'Mijares', '08030', '01961577-5993-764a-b68a-327cfa0b7ebe', 'Júcar', 40.1637, -0.7738, NULL, NULL, 13, unixepoch()),
+  ('guadalaviar-salida-arquillo', 'Guadalaviar a la salida de Arquillo', 'Guadalaviar', '08096', '01961577-59e3-7808-a91e-deccd059f2c0', 'Júcar', 40.3594, -1.1964, 'arquillo-de-san-blas', NULL, 14, unixepoch()),
+  ('guadalaviar-gea', 'Guadalaviar en Gea de Albarracín', 'Guadalaviar', '08149', '01961577-5a21-776e-87cb-2bd82d7b6514', 'Júcar', 40.394, -1.2906, NULL, NULL, 15, unixepoch()),
+  ('albentosa-salida-toranes', 'Albentosa a la salida de Los Toranes', 'Albentosa', '08173', '01961577-5a3c-7225-be31-66c43d076a4a', 'Júcar', 40.1452, -0.7398, NULL, NULL, 16, unixepoch()),
+  ('jiloca-en-calamocha', 'Jiloca en Calamocha', 'Jiloca', 'ES091_A042', '01a11199-1c50-78b6-8080-66220f9ac34b', 'Ebro', 40.9241, -1.3006, NULL, NULL, 17, unixepoch()),
+  ('matarrana-beceite', 'Matarraña en Beceite', 'Matarraña', 'ES091_A052', '01a11199-2115-7a4e-9963-44a614333616', 'Ebro', 40.8244, 0.1855, NULL, NULL, 18, unixepoch()),
+  ('guadalopillo-berge', 'Guadalopillo en Berge', 'Guadalopillo', 'ES091_A100', '01a11199-3bde-714b-a9e8-e4573e8e413a', 'Ebro', 40.8619, -0.4227, NULL, NULL, 19, unixepoch()),
+  ('guadalope-santolea', 'Guadalope en Santolea', 'Guadalope', 'ES091_A106', '01a11199-3e6b-7bbd-a5c6-a7c60f4730bb', 'Ebro', 40.7777, -0.314, NULL, NULL, 20, unixepoch()),
+  ('pena-valderrobres', 'Pena en Valderrobres', 'Pena', 'ES091_A109', '01a11199-3ebc-7bda-af81-6c10bd77b3b7', 'Ebro', 40.824, 0.132, NULL, NULL, 21, unixepoch()),
+  ('pena-beceite', 'Pena en Beceite', 'Pena', 'ES091_A110', '01a11199-3f0f-70f7-b983-6c4203a65c43', 'Ebro', 40.8008, 0.1299, NULL, NULL, 22, unixepoch()),
+  ('figuerales-valderrobres', 'Figuerales en Valderrobres', 'Figuerales', 'ES091_A113', '01a11199-3ff8-7ae1-8923-5c007ea0b88e', 'Ebro', 40.8025, 0.1179, NULL, NULL, 23, unixepoch()),
+  ('martin-oliete', 'Martín en Oliete', 'Martín', 'ES091_A118', '01a11199-40b9-7841-afec-6f675060eb49', 'Ebro', 40.9907, -0.6925, NULL, NULL, 24, unixepoch()),
+  ('martin-alcaine', 'Martín en Alcaine', 'Martín', 'ES091_A127', '01a11199-449f-72d1-bce1-d7d59fea47bc', 'Ebro', 40.9547, -0.7017, NULL, NULL, 25, unixepoch()),
+  ('algas-horta', 'Algas en Horta de Sant Joan', 'Algas', 'ES091_A153', '01a11199-4a59-710f-9331-2d313d38775e', 'Ebro', 40.9389, 0.274, NULL, NULL, 26, unixepoch()),
+  ('guadalopillo-gallipuen', 'Guadalopillo al pie de la presa de Gallipuén', 'Guadalopillo', 'ES091_A201', '01a11199-5c21-7864-be0d-a07feea3bac5', 'Ebro', 40.8764, -0.4131, NULL, NULL, 27, unixepoch()),
+  ('rio-seco-oliete', 'Río Seco en Oliete', 'Río Seco', 'ES091_A262', '01a11199-686f-7a5d-ade5-cb582e1fac04', 'Ebro', 40.9921, -0.6968, NULL, NULL, 28, unixepoch()),
+  ('ulldemo-beceite', 'Ulldemó en Beceite', 'Ulldemó', 'ES091_A297', '01a11199-78b8-76d1-8323-655a9b2991f4', 'Ebro', 40.8401, 0.1976, NULL, NULL, 29, unixepoch()),
+  ('barranco-tornos', 'Barranco de Tornos', 'Barranco de Tornos', 'ES091_A339', '01a11199-8a1a-7cc1-8ed6-e941c7c71c09', 'Ebro', 40.9523, -1.4389, NULL, NULL, 30, unixepoch()),
+  ('bordon-bordon', 'Bordón en Bordón', 'Bordón', 'ES091_A350', '01a11199-8bd7-723a-b326-a8603a9ec4cb', 'Ebro', 40.6944, -0.3199, NULL, NULL, 31, unixepoch()),
+  ('pitarque-villarluengo', 'Pitarque en Villarluengo', 'Pitarque', 'ES091_A351', '01a11199-8bf1-78a6-85b3-8a22dca32aee', 'Ebro', 40.6633, -0.5619, NULL, NULL, 32, unixepoch()),
+  ('guadalope-villarluengo', 'Guadalope en Villarluengo', 'Guadalope', 'ES091_A352', '01a11199-8c0c-789e-a7c6-3fabe664e81e', 'Ebro', 40.6893, -0.5688, NULL, NULL, 33, unixepoch()),
+  ('jiloca-villarquemado', 'Jiloca en Villarquemado', 'Jiloca', 'ES091_A393', '01a11199-943b-7496-8da0-a856291d84d6', 'Ebro', 40.5245, -1.2954, NULL, NULL, 34, unixepoch()),
+  ('martin-montalban', 'Martín en Montalbán', 'Martín', 'ES091_A399', '01a11199-9519-7139-b722-47161e63e3a1', 'Ebro', 40.8318, -0.8357, NULL, NULL, 35, unixepoch());

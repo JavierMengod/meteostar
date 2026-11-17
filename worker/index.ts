@@ -28,10 +28,14 @@ export default {
       ctx.waitUntil(actualizarSatelite(env, ctx));
       return;
     }
-    // Cada 10 minutos: archivo del radar de la zona y lecturas de los aforos de río (otra invocación aparte)
+    // Cada 5 minutos: lecturas de los aforos de río, por tandas (en su propia invocación, con su propio cupo de peticiones)
+    if (controller.cron === "1-59/5 * * * *") {
+      ctx.waitUntil(actualizarAforos(env).catch((e) => console.error("aforos", e)));
+      return;
+    }
+    // Cada 10 minutos: archivo del radar de la zona (otra invocación aparte)
     if (controller.cron === "8-59/10 * * * *") {
       ctx.waitUntil(archivarRadar(env).catch((e) => console.error("radar", e)));
-      ctx.waitUntil(actualizarAforos(env).catch((e) => console.error("aforos", e)));
       // Una vez al día (03:08 UTC): medias diarias de los aforos y resumen del histórico
       const d = new Date(controller.scheduledTime);
       if (d.getUTCHours() === 3 && d.getUTCMinutes() < 10) ctx.waitUntil(actualizarHistorico(env).catch((e) => console.error("histórico aforos", e)));

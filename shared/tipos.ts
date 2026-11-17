@@ -498,6 +498,10 @@ export interface ResumenAforo {
   crecidasRegulado: CrecidaAforo[];
   puntasRegulado: CrecidaAforo[];
   correccion: CorreccionModelo | null;
+  /** Lo normal del modelo (p50 y p90) por día del año hidrológico, para aforos sin histórico propio */
+  climaModelo: ([number, number] | null)[] | null;
+  /** Cuándo se calcularon la corrección y lo normal del modelo (se rehacen una vez al mes) */
+  modeloCalculado: number | null;
   desde: string | null;
   hasta: string | null;
 }
