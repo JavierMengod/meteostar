@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { avisoPrevision, calcularCorreccion, componerPrevision, corregir, estacionDelAnio } from "../worker/prevision-rio";
 import { type FilaAforo, miniSerie, tarjeta } from "../worker/aforos";
-import { mensajePrevision, situacionAforo } from "../shared/rios";
+import { estadoDatos, mensajePrevision, situacionAforo } from "../shared/rios";
 import type { DiaRio } from "../shared/tipos";
 
 describe("corrección del modelo", () => {
@@ -140,5 +140,21 @@ describe("portada de ríos", () => {
     const crecida = situacionAforo({ ...base, ultimo: { t: 0, caudal: 45, nivel: null } });
     expect(crecida.textoAviso).toBe("Aviso naranja");
     expect(crecida.color).toBe("#ff8c1a");
+  });
+});
+
+describe("estado de los datos de un aforo", () => {
+  const ahora = 100_000;
+  it("distingue sin datos, datos antiguos y sin agua", () => {
+    expect(estadoDatos({ ultimo: null }, ahora)).toEqual({ estado: "sin-datos", sinAgua: false });
+    expect(estadoDatos({ ultimo: { t: ahora - 3600, caudal: 1, nivel: 0.4 } }, ahora)).toEqual({ estado: "ok", sinAgua: false });
+    expect(estadoDatos({ ultimo: { t: ahora - 18 * 3600, caudal: null, nivel: -0.05 } }, ahora)).toEqual({ estado: "antiguo", sinAgua: true });
+    expect(estadoDatos({ ultimo: { t: ahora, caudal: 0, nivel: 0.02 } }, ahora).sinAgua).toBe(true);
+  });
+
+  it("no da aviso ni comparación si el aforo no publica datos", () => {
+    const s = situacionAforo({ ultimo: null, umbrales: [20, 40, 50], normalHoy: [1, 2, 3, 4, 5] }, ahora);
+    expect(s).toMatchObject({ estado: "sin-datos", aviso: -1, textoAviso: null, normal: null, pastilla: "Sin datos", color: "#9ca3af" });
+    expect(situacionAforo({ ultimo: { t: ahora, caudal: null, nivel: 0 }, umbrales: [], normalHoy: null }, ahora).pastilla).toBe("Sin agua");
   });
 });

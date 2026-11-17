@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { DetalleAforo } from "../../shared/tipos";
 import { diaHora, hace, hora, n } from "../formato";
-import { NOMBRES_AVISO, situacionAforo, textoTendencia } from "../rios";
+import { HORAS_ANTIGUO, NOMBRES_AVISO, situacionAforo, textoTendencia } from "../rios";
 
 const PERIODOS: [number, string][] = [
   [48, "48 h"],
@@ -61,8 +61,33 @@ export default function AforoAhora({ a }: { a: DetalleAforo }) {
     />
   );
 
+  // Aforo que no publica nada: se explica en lugar de dejar la tarjeta vacía
+  if (s.estado === "sin-datos") {
+    return (
+      <section className="tarjeta rio aforo-sin-datos">
+        <small className="mono">SIN DATOS</small>
+        <p className="estado-modelo">Este aforo no está publicando datos ahora mismo</p>
+        <p className="suave">
+          El Observatorio del Agua no tiene lecturas suyas de los últimos 7 días: puede estar fuera de servicio, en obras o averiado. En cuanto vuelva a
+          publicar, aparecerán aquí solas. Mientras tanto, la previsión de abajo da una idea de cómo va el río.
+        </p>
+        <p className="suave pequeno">
+          <a href="https://observatorioagua.miteco.es/hidrologia/" target="_blank" rel="noreferrer">
+            Ver el aforo en el Observatorio del Agua
+          </a>
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="tarjeta rio">
+      {s.estado === "antiguo" && a.ultimo && (
+        <p className="aviso-datos">
+          Sin datos recientes: la última lectura es de hace {Math.round((ahora - a.ultimo.t) / 3600)} horas (más de {HORAS_ANTIGUO} h). El aforo puede estar
+          parado o con retraso.
+        </p>
+      )}
       <div className="rio-resumen">
         <div>
           <small className="mono">{soloNivel ? "NIVEL MEDIDO" : "CAUDAL MEDIDO"}</small>
@@ -71,6 +96,13 @@ export default function AforoAhora({ a }: { a: DetalleAforo }) {
             <sup>{unidad}</sup>
           </p>
           {soloNivel && <p className="suave pequeno">Este aforo solo publica el nivel del agua, no el caudal.</p>}
+          {s.sinAgua && (
+            <p className="sin-agua">
+              {soloNivel && (a.ultimo?.nivel ?? 0) < 0
+                ? "Sin agua: el nivel está por debajo del cero de la escala, el cauce está seco."
+                : "Sin agua: el cauce está seco o casi seco."}
+            </p>
+          )}
           {t && <span className={`variacion ${t.clase}`}>{`${t.flecha} ${t.texto}`}</span>}
           {s.normal && a.normalHoy && (
             <p className="frente-normal">

@@ -3813,3 +3813,31 @@ h3 {
 .cabecera-seccion {
   scroll-margin-top: 80px;
 }
+
+/* --- Aforos sin datos, con datos antiguos o secos --- */
+.aforo-sin-datos {
+  display: grid;
+  gap: 8px;
+}
+.aforo-sin-datos p {
+  margin: 0;
+}
+.aforo-sin-datos small {
+  color: var(--texto-suave);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+.aviso-datos {
+  margin: 0;
+  font-size: 0.88rem;
+  padding: 8px 12px;
+  border-radius: var(--radio);
+  border: 1px solid #9ca3af;
+  background: color-mix(in srgb, #9ca3af 14%, transparent);
+}
+.sin-agua {
+  margin: 2px 0 0;
+  color: #8a6d45;
+  font-weight: 600;
+  font-size: 0.9rem;
+}

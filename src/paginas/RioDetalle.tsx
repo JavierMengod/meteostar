@@ -5,7 +5,7 @@ import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
 import { usePeticion } from "../datos";
 import { colorEmbalse } from "../embalses";
 import { conSigno, n } from "../formato";
-import { situacionAforo } from "../rios";
+import { nombreDeRio, situacionAforo } from "../rios";
 
 const Mapa = lazy(() => import("../componentes/Mapa"));
 const AforoAhora = lazy(() => import("../componentes/AforoAhora"));
@@ -60,7 +60,7 @@ function Situacion({ a, embalses }: { a: DetalleAforo; embalses: RespuestaEmbals
             {a.codigo && <span className="suave"> · estación {a.codigo}</span>}
           </p>
           <p className="suave pequeno">
-            Río {a.rio}
+            {nombreDeRio(a.rio)}
             {a.confederacion && ` · Confederación Hidrográfica del ${a.confederacion}`}
           </p>
           {a.lluvia && (
@@ -89,7 +89,7 @@ export default function RioDetalle({ slug }: { slug: string }) {
         </a>
         <h1>{a.nombre}</h1>
         <p className="suave">
-          Río {a.rio}
+          {nombreDeRio(a.rio)}
           {a.confederacion && ` · cuenca del ${a.confederacion}`}
           {a.codigo && ` · aforo ${a.codigo}`}
         </p>

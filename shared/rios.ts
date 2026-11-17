@@ -27,20 +27,57 @@ export function nivelAviso(caudal: number | null, umbrales: number[]): number {
   return nivel;
 }
 
-/** Situación de un aforo: aviso oficial (si lo hay) y cómo va frente a lo normal de la época. */
-export function situacionAforo(a: Pick<Aforo, "ultimo" | "umbrales" | "normalHoy">) {
+/** «Río Turia», pero «Barranco de Tornos» o «Río Seco» tal cual. */
+export const nombreDeRio = (rio: string) => (/^(r[ií]o|barranco|rambla|arroyo)\b/i.test(rio) ? rio : `Río ${rio}`);
+
+/** Horas sin lecturas a partir de las que el dato se considera antiguo */
+export const HORAS_ANTIGUO = 6;
+export const COLOR_SIN_DATOS = "#9ca3af";
+export const COLOR_SIN_AGUA = "#a68a64";
+
+/**
+ * Estado de los datos de un aforo:
+ * - «sin-datos»: el Observatorio no publica lecturas (aforo fuera de servicio o averiado).
+ * - «antiguo»: la última lectura es de hace más de HORAS_ANTIGUO horas.
+ * - «ok».
+ * «sinAgua»: el cauce está seco (caudal 0 o nivel por debajo del cero de la escala).
+ */
+export function estadoDatos(a: Pick<Aforo, "ultimo">, ahora = Date.now() / 1000) {
+  const u = a.ultimo;
+  const estado: "ok" | "antiguo" | "sin-datos" = !u || (u.caudal === null && u.nivel === null) ? "sin-datos" : ahora - u.t > HORAS_ANTIGUO * 3600 ? "antiguo" : "ok";
+  const sinAgua = !!u && (u.caudal !== null ? u.caudal <= 0.001 : u.nivel !== null && u.nivel <= 0.005);
+  return { estado, sinAgua };
+}
+
+/** Situación de un aforo: estado de los datos, aviso oficial (si lo hay) y cómo va frente a lo normal de la época. */
+export function situacionAforo(a: Pick<Aforo, "ultimo" | "umbrales" | "normalHoy">, ahora = Date.now() / 1000) {
+  const { estado, sinAgua } = estadoDatos(a, ahora);
   const caudal = a.ultimo?.caudal ?? null;
-  const aviso = nivelAviso(caudal, a.umbrales);
-  const normal = caudal !== null && a.normalHoy ? comparaNormal(caudal, a.normalHoy) : null;
+  const valido = estado !== "sin-datos";
+  const aviso = valido ? nivelAviso(caudal, a.umbrales) : -1;
+  const normal = valido && caudal !== null && a.normalHoy ? comparaNormal(caudal, a.normalHoy) : null;
   const siguiente = a.umbrales[aviso + 1];
   return {
     caudal,
+    estado,
+    sinAgua,
     aviso,
-    textoAviso: aviso >= 0 ? NOMBRES_AVISO[aviso] : a.umbrales.length ? "Sin aviso" : null,
-    siguienteAviso: siguiente !== undefined ? `${NOMBRES_AVISO[aviso + 1] ?? "Aviso"} a partir de ${n(siguiente, 0)} m³/s` : null,
+    textoAviso: aviso >= 0 ? NOMBRES_AVISO[aviso] : valido && a.umbrales.length ? "Sin aviso" : null,
+    siguienteAviso: valido && siguiente !== undefined ? `${NOMBRES_AVISO[aviso + 1] ?? "Aviso"} a partir de ${n(siguiente, 0)} m³/s` : null,
     normal,
-    /** Color para el mapa y las tarjetas: el del aviso si lo hay; si no, el de lo normal */
-    color: aviso >= 0 ? COLORES_AVISO[aviso] : normal ? COLORES_NIVEL[normal.nivel + 2] : "#6b7280",
+    /** Texto corto del estado para las tarjetas y la lista */
+    pastilla: estado === "sin-datos" ? "Sin datos" : sinAgua ? "Sin agua" : (normal?.corto ?? null),
+    /** Color para el mapa y las tarjetas: aviso, sin datos, sin agua o cómo va frente a lo normal */
+    color:
+      aviso >= 0
+        ? COLORES_AVISO[aviso]
+        : estado !== "ok"
+          ? COLOR_SIN_DATOS
+          : sinAgua
+            ? COLOR_SIN_AGUA
+            : normal
+              ? COLORES_NIVEL[normal.nivel + 2]
+              : "#6b7280",
   };
 }
 

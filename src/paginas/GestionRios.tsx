@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { Aforo, AforoCatalogo, RespuestaAforos, RespuestaEmbalses } from "../../shared/tipos";
 import { enviar, usePeticion } from "../datos";
 import { n } from "../formato";
+import { nombreDeRio } from "../rios";
 import { Campo } from "./Acceso";
 
 interface Formulario {
@@ -135,7 +136,7 @@ export default function GestionRios() {
             <div>
               <b>{a.nombre}</b>
               <small>
-                Río {a.rio}
+                {nombreDeRio(a.rio)}
                 {a.confederacion && ` · ${a.confederacion}`}
                 {a.codigo && ` · aforo ${a.codigo}`}
                 {a.ultimo?.caudal != null && ` · ahora ${n(a.ultimo.caudal, 2)} m³/s`}

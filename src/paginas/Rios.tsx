@@ -7,7 +7,7 @@ import BotonSeguir from "../componentes/BotonSeguir";
 import { Cargando, CabeceraSeccion } from "../componentes/Piezas";
 import { usePeticion, useSesion } from "../datos";
 import { hace, n } from "../formato";
-import { COLORES_NIVEL, situacionAforo, textoTendencia } from "../rios";
+import { COLOR_SIN_AGUA, COLOR_SIN_DATOS, COLORES_NIVEL, nombreDeRio, situacionAforo, textoTendencia } from "../rios";
 import { useSeguidos } from "../seguidos";
 
 const Mapa = lazy(() => import("../componentes/Mapa"));
@@ -17,6 +17,7 @@ type Seguidos = ReturnType<typeof useSeguidos>;
 /** Valor principal de un aforo: el caudal o, si no lo da, el nivel. */
 function valor(a: Aforo): { cifra: string; unidad: string } {
   const u = a.ultimo;
+  if (u?.caudal == null && u?.nivel != null && u.nivel < 0) return { cifra: "0", unidad: "m de nivel" };
   if (u?.caudal != null) return { cifra: n(u.caudal, u.caudal < 10 ? 2 : 1), unidad: "m³/s" };
   if (u?.nivel != null) return { cifra: n(u.nivel, 2), unidad: "m de nivel" };
   return { cifra: "—", unidad: "" };
@@ -54,7 +55,7 @@ function TarjetaRio({ a, seg }: { a: Aforo; seg: Seguidos }) {
         <div>
           <h3>{a.nombre}</h3>
           <p className="suave pequeno">
-            Río {a.rio}
+            {nombreDeRio(a.rio)}
             {a.confederacion && ` · ${a.confederacion}`}
           </p>
         </div>
@@ -65,9 +66,9 @@ function TarjetaRio({ a, seg }: { a: Aforo; seg: Seguidos }) {
         <sup>{v.unidad}</sup>
       </p>
       <p className="estado-rio">
-        {s.normal && (
+        {s.pastilla && (
           <span className="pastilla-normal" style={{ background: s.color }}>
-            {s.normal.corto}
+            {s.pastilla}
           </span>
         )}
         {s.textoAviso && <span className={`insignia-aviso ${s.aviso >= 0 ? `aviso-${s.aviso + 1}` : ""}`}>{s.textoAviso}</span>}
@@ -79,7 +80,9 @@ function TarjetaRio({ a, seg }: { a: Aforo; seg: Seguidos }) {
       </p>
       <Mini serie={a.mini} color={s.color} />
       <p className="suave pequeno">
-        {a.ultimo ? `Lectura ${hace(Math.floor(Date.now() / 1000) - a.ultimo.t)}` : "Aún sin lecturas"}
+        {s.estado === "sin-datos"
+          ? "El aforo no está publicando datos ahora mismo"
+          : `${s.estado === "antiguo" ? "Sin datos recientes: última lectura" : "Lectura"} ${hace(Math.floor(Date.now() / 1000) - a.ultimo!.t)}`}
         {a.normalHoy && ` · lo normal estos días: ${n(a.normalHoy[2], 2)} m³/s`}
       </p>
       <span className="ver-grafica">Ver el río ›</span>
@@ -97,7 +100,7 @@ function FilaRio({ a, seg }: { a: Aforo; seg: Seguidos }) {
       <i className="punto-rio" style={{ background: s.color }} aria-hidden="true" />
       <span className="fila-rio-nombre">
         <b>{a.nombre}</b>
-        <small className="suave">Río {a.rio}</small>
+        <small className="suave">{nombreDeRio(a.rio)}</small>
       </span>
       <span className="fila-rio-valor">
         <b>{v.cifra}</b> <small className="suave">{v.unidad}</small>
@@ -105,9 +108,9 @@ function FilaRio({ a, seg }: { a: Aforo; seg: Seguidos }) {
       <span className="fila-rio-estado">
         {s.aviso >= 0 ? (
           <span className={`insignia-aviso aviso-${s.aviso + 1}`}>{s.textoAviso}</span>
-        ) : s.normal ? (
+        ) : s.pastilla ? (
           <span className="pastilla-normal" style={{ background: s.color }}>
-            {s.normal.corto}
+            {s.estado === "antiguo" ? "Sin datos recientes" : s.pastilla}
           </span>
         ) : null}
         {t && <span className={`variacion ${t.clase}`}>{t.flecha}</span>}
@@ -218,6 +221,7 @@ export default function Rios() {
       <p className="leyenda-rios suave pequeno">
         <i style={{ background: COLORES_NIVEL[0] }} /> Muy bajo <i style={{ background: COLORES_NIVEL[1] }} /> Bajo <i style={{ background: COLORES_NIVEL[2] }} /> Normal{" "}
         <i style={{ background: COLORES_NIVEL[3] }} /> Alto <i style={{ background: COLORES_NIVEL[4] }} /> Muy alto <i style={{ background: "#e0b400" }} /> Con aviso{" "}
+        <i style={{ background: COLOR_SIN_AGUA }} /> Sin agua <i style={{ background: COLOR_SIN_DATOS }} /> Sin datos{" "}
         <i style={{ background: "#6b7280" }} /> Sin histórico para comparar
       </p>
 
