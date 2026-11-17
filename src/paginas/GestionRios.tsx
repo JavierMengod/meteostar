@@ -53,6 +53,7 @@ export default function GestionRios() {
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const lista = datos?.aforos ?? [];
+  const porDefecto = datos?.porDefecto ?? [];
 
   const abrirCatalogo = async () => {
     setError(null);
@@ -140,6 +141,14 @@ export default function GestionRios() {
               </button>
               <button className="boton-mini" disabled={i === lista.length - 1} onClick={() => mover(i, 1)} aria-label="Bajar">
                 ↓
+              </button>
+              <button
+                className={`boton-mini ${porDefecto.includes(a.slug) ? "marcado" : ""}`}
+                aria-pressed={porDefecto.includes(a.slug)}
+                title="Se ve destacado para quien no tiene cuenta"
+                onClick={() => accion(() => enviar("/api/admin/por-defecto", "PUT", { tipo: "rio", slug: a.slug, destacado: !porDefecto.includes(a.slug) }))}
+              >
+                {porDefecto.includes(a.slug) ? "★ Por defecto" : "☆ Por defecto"}
               </button>
               <button className="boton-mini" onClick={() => empezarEdicion(a)}>
                 Editar

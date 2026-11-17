@@ -243,6 +243,8 @@ export interface UsuarioSesion {
   nombre: string;
   rol: "usuario" | "admin";
   tema: Tema;
+  /** Ríos y embalses que sigue (slugs) */
+  favoritos: { rios: string[]; embalses: string[] };
 }
 
 export interface CampoConector {
@@ -282,7 +284,7 @@ export interface Ubicacion extends Lugar {
 }
 
 export interface RespuestaCuenta {
-  usuario: UsuarioSesion;
+  usuario: Omit<UsuarioSesion, "favoritos">;
   estaciones: EstacionPropia[];
   ubicaciones: Ubicacion[];
 }
@@ -339,6 +341,8 @@ export interface Embalse {
 
 export interface RespuestaEmbalses {
   fecha: string | null;
+  /** Los que se ven destacados por defecto */
+  porDefecto: string[];
   embalses: Embalse[];
   /** Embalses configurados que no se han podido leer */
   errores: string[];
@@ -407,6 +411,8 @@ export interface Aforo extends AforoConfig {
 
 export interface RespuestaAforos {
   aforos: Aforo[];
+  /** Los que se ven por defecto (sin cuenta, o si el usuario no ha elegido ninguno) */
+  porDefecto: string[];
 }
 
 /** Página de un aforo. */

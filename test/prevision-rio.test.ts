@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { avisoPrevision, calcularCorreccion, componerPrevision, corregir, estacionDelAnio } from "../worker/prevision-rio";
-import { miniSerie } from "../worker/aforos";
+import { type FilaAforo, miniSerie, tarjeta } from "../worker/aforos";
 import { mensajePrevision, situacionAforo } from "../shared/rios";
 import type { DiaRio } from "../shared/tipos";
 
@@ -98,6 +98,32 @@ describe("previsión", () => {
 });
 
 describe("portada de ríos", () => {
+  it("usa el nivel en la minigráfica si el aforo no da caudal", () => {
+    const serie: [number, number | null, number | null][] = [
+      [0, null, 0.4],
+      [3600, null, 0.5],
+    ];
+    expect(miniSerie(serie, 3600)).toEqual([
+      [0, 0.4],
+      [3600, 0.5],
+    ]);
+  });
+
+  it("monta la tarjeta con la última lectura guardada en la fila del aforo", () => {
+    const fila = {
+      slug: "turia-teruel", nombre: "Turia en Teruel", rio: "Turia", codigo: "08015", elemento: "x", confederacion: "Júcar",
+      lat: 40.3, lon: -1.1, embalse: null, regulado_desde: null, umbrales: "[20,40,50]", celda_lat: null, celda_lon: null,
+      orden: 1, destacado: 1, ultimo_t: 100, ultimo_caudal: 0.96, ultimo_nivel: 0.4, tendencia: -0.03,
+      mini: "[[0,1],[100,0.96]]", normal_hoy: "[0.6,0.9,1.2,1.5,2.5]", leido: 100,
+    } satisfies FilaAforo;
+    const t = tarjeta(fila);
+    expect(t.ultimo).toEqual({ t: 100, caudal: 0.96, nivel: 0.4 });
+    expect(t.umbrales).toEqual([20, 40, 50]);
+    expect(t.normalHoy?.[2]).toBe(1.2);
+    expect(t.mini).toHaveLength(2);
+    expect(tarjeta({ ...fila, ultimo_t: null, mini: null, normal_hoy: null }).ultimo).toBeNull();
+  });
+
   it("deja una lectura por hora de las últimas 48 h", () => {
     const ahora = 100 * 3600;
     const serie: [number, number | null, number | null][] = [];

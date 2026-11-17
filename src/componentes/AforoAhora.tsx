@@ -31,13 +31,17 @@ export default function AforoAhora({ a }: { a: DetalleAforo }) {
   const ahora = Math.floor(Date.now() / 1000);
   const desde = ahora - horas * 3600;
 
-  const datos = a.serie.filter(([tt, c]) => tt >= desde && c !== null).map(([tt, c]) => ({ t: tt, caudal: c }));
+  // Algunos aforos solo publican el nivel: entonces se muestra el nivel en metros
+  const soloNivel = !a.serie.some((p) => p[1] !== null) && a.serie.some((p) => p[2] !== null);
+  const columna = soloNivel ? 2 : 1;
+  const unidad = soloNivel ? "m" : "m³/s";
+  const datos = a.serie.filter((p) => p[0] >= desde && p[columna] !== null).map((p) => ({ t: p[0], caudal: p[columna] }));
   const t0 = datos[0]?.t ?? desde;
   const t1 = datos.at(-1)?.t ?? ahora;
   const ticks = marcas(t0, t1, horas);
   const maximo = Math.max(0, ...datos.map((d) => d.caudal ?? 0));
   // Los umbrales solo se dibujan si el río se acerca a ellos; si no, aplastarían la gráfica
-  const umbrales = a.umbrales.filter((u) => u <= maximo * 1.6);
+  const umbrales = soloNivel ? [] : a.umbrales.filter((u) => u <= maximo * 1.6);
   const lluvia = (a.lluvia?.dias ?? [])
     .map(([f, mm]) => ({ t: Date.parse(`${f}T12:00:00`) / 1000, lluvia: mm }))
     .filter((d) => d.t >= t0 - 43200 && d.t <= t1 + 43200);
@@ -61,11 +65,12 @@ export default function AforoAhora({ a }: { a: DetalleAforo }) {
     <section className="tarjeta rio">
       <div className="rio-resumen">
         <div>
-          <small className="mono">CAUDAL MEDIDO</small>
+          <small className="mono">{soloNivel ? "NIVEL MEDIDO" : "CAUDAL MEDIDO"}</small>
           <p className="numero-grande">
-            {s.caudal === null ? "—" : n(s.caudal, 2)}
-            <sup>m³/s</sup>
+            {soloNivel ? n(a.ultimo?.nivel ?? null, 2) : s.caudal === null ? "—" : n(s.caudal, 2)}
+            <sup>{unidad}</sup>
           </p>
+          {soloNivel && <p className="suave pequeno">Este aforo solo publica el nivel del agua, no el caudal.</p>}
           {t && <span className={`variacion ${t.clase}`}>{`${t.flecha} ${t.texto}`}</span>}
           {s.normal && a.normalHoy && (
             <p className="frente-normal">
@@ -74,7 +79,7 @@ export default function AforoAhora({ a }: { a: DetalleAforo }) {
             </p>
           )}
           <p className="suave pequeno">
-            {a.ultimo?.nivel != null && `Nivel ${n(a.ultimo.nivel, 2)} m · `}
+            {!soloNivel && a.ultimo?.nivel != null && `Nivel ${n(a.ultimo.nivel, 2)} m · `}
             {a.ultimo ? `lectura de las ${hora(a.ultimo.t)} (${hace(ahora - a.ultimo.t)})` : "sin lecturas"}
           </p>
         </div>
@@ -104,8 +109,8 @@ export default function AforoAhora({ a }: { a: DetalleAforo }) {
             <ComposedChart data={datos} margin={MARGEN}>
               <CartesianGrid stroke="var(--rejilla)" vertical={false} />
               {eje}
-              <YAxis width={44} tick={{ className: "eje" }} stroke="var(--borde)" domain={[0, "auto"]} />
-              <Tooltip labelFormatter={(x) => diaHora(Number(x))} formatter={(v) => [`${n(v as number, 2)} m³/s`, "Caudal"]} contentStyle={tooltipEstilo} />
+              <YAxis width={44} tick={{ className: "eje" }} stroke="var(--borde)" domain={soloNivel ? ["auto", "auto"] : [0, "auto"]} />
+              <Tooltip labelFormatter={(x) => diaHora(Number(x))} formatter={(v) => [`${n(v as number, 2)} ${unidad}`, soloNivel ? "Nivel" : "Caudal"]} contentStyle={tooltipEstilo} />
               {umbrales.map((u, i) => (
                 <ReferenceLine
                   key={u}

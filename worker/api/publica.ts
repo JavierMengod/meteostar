@@ -204,7 +204,7 @@ const slugValido = (s: string) => /^[a-z0-9-]{1,80}$/.test(s);
 app.get("/aforos", async (c) => {
   try {
     c.header("Cache-Control", "public, max-age=300");
-    return c.json({ aforos: await estadoAforos(c.env) });
+    return c.json(await estadoAforos(c.env));
   } catch (e) {
     console.error(e);
     return c.json({ error: "aforos no disponibles" }, 502);

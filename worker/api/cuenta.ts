@@ -66,8 +66,13 @@ function validarAlta(b: Record<string, any>): string | null {
 // ----- Acceso -----
 
 app.get("/auth/estado", async (c) => {
-  const usuario = await usuarioActual(c);
+  const u = await usuarioActual(c);
   const hay = await c.env.DB.prepare("SELECT 1 FROM usuarios LIMIT 1").first();
+  let usuario = null;
+  if (u) {
+    const favs = (await c.env.DB.prepare("SELECT tipo, slug FROM favoritos WHERE usuario_id = ? ORDER BY creado").bind(u.id).all<{ tipo: string; slug: string }>()).results;
+    usuario = { ...u, favoritos: { rios: favs.filter((f) => f.tipo === "rio").map((f) => f.slug), embalses: favs.filter((f) => f.tipo === "embalse").map((f) => f.slug) } };
+  }
   c.header("Cache-Control", "no-store");
   return c.json({ usuario, necesitaConfiguracion: !hay });
 });
@@ -398,6 +403,25 @@ app.put("/admin/embalses/orden", async (c) => {
   return c.json({ ok: true });
 });
 
+// ----- Ríos y embalses que sigue el usuario -----
+
+/** Marca o desmarca un río o un embalse como seguido. */
+app.put("/cuenta/favoritos", async (c) => {
+  const u = c.get("usuario");
+  const b = await cuerpo(c);
+  const tipo = b?.tipo === "rio" || b?.tipo === "embalse" ? b.tipo : null;
+  const slug = texto(b?.slug, 80);
+  if (!tipo || !/^[a-z0-9-]+$/.test(slug)) return c.json({ error: "Petición no válida" }, 400);
+  if (b?.seguir) {
+    const tabla = tipo === "rio" ? "aforos" : "embalses";
+    if (!(await c.env.DB.prepare(`SELECT 1 FROM ${tabla} WHERE slug = ?`).bind(slug).first())) return c.json({ error: "No existe" }, 404);
+    await c.env.DB.prepare("INSERT OR IGNORE INTO favoritos (usuario_id, tipo, slug, creado) VALUES (?, ?, ?, unixepoch())").bind(u.id, tipo, slug).run();
+  } else {
+    await c.env.DB.prepare("DELETE FROM favoritos WHERE usuario_id = ? AND tipo = ? AND slug = ?").bind(u.id, tipo, slug).run();
+  }
+  return c.json({ ok: true });
+});
+
 // ----- Ríos (aforos) que se muestran -----
 
 app.get("/admin/aforos/catalogo", async (c) => {
@@ -422,7 +446,7 @@ app.post("/admin/aforos", async (c) => {
   const embalse = texto(b?.embalse, 80) || null;
   if (!elemento || !nombre || !rio) return c.json({ error: "Faltan el aforo, el nombre o el río" }, 400);
   if (embalse && !/^[a-z0-9-]+$/.test(embalse)) return c.json({ error: "Embalse no válido" }, 400);
-  if ((await aforosConfigurados(c.env.DB)).length >= 20) return c.json({ error: "Como mucho 20 ríos" }, 400);
+  if ((await aforosConfigurados(c.env.DB)).length >= 300) return c.json({ error: "Como mucho 300 ríos" }, 400);
   const r = await anadirAforo(c.env, c.executionCtx, { elemento, nombre, rio, embalse, reguladoDesde: anioRegulado(b?.reguladoDesde) });
   return "error" in r ? c.json(r, 400) : c.json(r);
 });
@@ -452,7 +476,17 @@ app.delete("/admin/aforos/:slug", async (c) => {
 app.put("/admin/aforos-orden", async (c) => {
   const lista = (await cuerpo(c))?.slugs;
   if (!Array.isArray(lista)) return c.json({ error: "Petición no válida" }, 400);
-  await c.env.DB.batch(lista.slice(0, 20).map((slug: unknown, i: number) => c.env.DB.prepare("UPDATE aforos SET orden = ? WHERE slug = ?").bind(i + 1, String(slug))));
+  await c.env.DB.batch(lista.slice(0, 300).map((slug: unknown, i: number) => c.env.DB.prepare("UPDATE aforos SET orden = ? WHERE slug = ?").bind(i + 1, String(slug))));
+  return c.json({ ok: true });
+});
+
+/** Lo que se ve por defecto (sin cuenta): marca o desmarca un río o un embalse. */
+app.put("/admin/por-defecto", async (c) => {
+  const b = await cuerpo(c);
+  const tabla = b?.tipo === "rio" ? "aforos" : b?.tipo === "embalse" ? "embalses" : null;
+  const slug = texto(b?.slug, 80);
+  if (!tabla || !/^[a-z0-9-]+$/.test(slug)) return c.json({ error: "Petición no válida" }, 400);
+  await c.env.DB.prepare(`UPDATE ${tabla} SET destacado = ? WHERE slug = ?`).bind(b?.destacado ? 1 : 0, slug).run();
   return c.json({ ok: true });
 });
 

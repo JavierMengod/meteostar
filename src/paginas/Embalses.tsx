@@ -1,9 +1,14 @@
-// Embalses: el primero de la lista (el «de casa») destacado arriba y el resto agrupados por cuenca.
+// Embalses: arriba, grandes, los que sigue el usuario (sin cuenta, los de por defecto: Arquillo de San Blas);
+// el resto, agrupados por cuenca.
 // Datos del boletín semanal del MITECO y, si lo hay, el dato reciente del SAIH.
 import { lazy, Suspense } from "react";
 import type { Embalse, RespuestaEmbalses } from "../../shared/tipos";
 import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
+import BotonSeguir from "../componentes/BotonSeguir";
 import { usePeticion } from "../datos";
+import { useSeguidos } from "../seguidos";
+
+type Seguidos = ReturnType<typeof useSeguidos>;
 import { colorEmbalse } from "../embalses";
 import { conSigno, fechaCompleta, hora, n, nombreMes } from "../formato";
 
@@ -61,11 +66,14 @@ function Serie({ serie, color }: { serie: Embalse["serie"]; color: string }) {
 
 const mesAnio = (fecha: string) => nombreMes(fecha.slice(0, 7)).replace(" de ", " ");
 
-function TarjetaEmbalse({ e }: { e: Embalse }) {
+function TarjetaEmbalse({ e, seg }: { e: Embalse; seg: Seguidos }) {
   const color = colorEmbalse(e.porcentaje);
   return (
     <a href={`/embalses/${e.slug}`} className="tarjeta tarjeta-embalse enlace">
-      <h3>{e.nombre}</h3>
+      <div className="tarjeta-rio-cabecera">
+        <h3>{e.nombre}</h3>
+        {seg.usuario && <BotonSeguir activo={seg.sigue(e.slug)} ocupado={seg.ocupado === e.slug} onClick={() => seg.alternar(e.slug)} nombre={e.nombre} />}
+      </div>
       <p className="suave pequeno">
         {e.rio ? `Río ${e.rio} · ` : ""}
         {e.provincia}
@@ -106,13 +114,16 @@ function Reciente({ e }: { e: Embalse }) {
   );
 }
 
-/** El embalse de casa, grande y arriba. */
-function Destacado({ e }: { e: Embalse }) {
+/** Embalse destacado: grande y arriba. */
+function Destacado({ e, seg }: { e: Embalse; seg: Seguidos }) {
   const color = colorEmbalse(e.porcentaje);
   return (
     <a href={`/embalses/${e.slug}`} className="tarjeta embalse-destacado enlace">
       <div className="destacado-estado">
-        <small className="mono">EL EMBALSE DE CASA</small>
+        <div className="tarjeta-rio-cabecera">
+          <small className="mono">{seg.sonPropios ? "LO SIGUES" : "DESTACADO"}</small>
+          {seg.usuario && <BotonSeguir activo={seg.sigue(e.slug)} ocupado={seg.ocupado === e.slug} onClick={() => seg.alternar(e.slug)} nombre={e.nombre} />}
+        </div>
         <h2>{e.nombre}</h2>
         <p className="suave pequeno">
           {e.rio ? `Río ${e.rio} · ` : ""}
@@ -143,8 +154,10 @@ function Destacado({ e }: { e: Embalse }) {
 
 export default function Embalses() {
   const { datos, error } = usePeticion<RespuestaEmbalses>("/api/embalses", 30 * 60_000);
+  const seg = useSeguidos("embalse", datos?.porDefecto ?? []);
   if (!datos) return <Cargando error={error} />;
-  const [casa, ...resto] = datos.embalses;
+  const destacados = seg.destacados.map((slug) => datos.embalses.find((e) => e.slug === slug)).filter((e): e is Embalse => !!e);
+  const resto = datos.embalses.filter((e) => !destacados.includes(e));
   const cuencas = [...new Set(resto.map((e) => e.cuenca))];
   const rios = (c: string) => [...new Set(datos.embalses.filter((e) => e.cuenca === c && e.rio).map((e) => e.rio!))];
 
@@ -157,7 +170,16 @@ export default function Embalses() {
         </p>
       </section>
 
-      {casa && <Destacado e={casa} />}
+      {destacados.map((e) => (
+        <Destacado key={e.slug} e={e} seg={seg} />
+      ))}
+      <p className="suave pequeno nota-seguir">
+        {seg.usuario
+          ? seg.sonPropios
+            ? "Arriba están los embalses que sigues. Pulsa ☆ en cualquiera para añadirlo o quitarlo."
+            : "Pulsa ☆ en cualquier embalse para tenerlo arriba."
+          : "Entra en tu cuenta para elegir los embalses que ves arriba."}
+      </p>
 
       {cuencas.map((c) => {
         const r = rios(c);
@@ -171,7 +193,7 @@ export default function Embalses() {
               {resto
                 .filter((e) => e.cuenca === c)
                 .map((e) => (
-                  <TarjetaEmbalse key={e.slug} e={e} />
+                  <TarjetaEmbalse key={e.slug} e={e} seg={seg} />
                 ))}
             </div>
           </div>

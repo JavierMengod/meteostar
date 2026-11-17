@@ -52,10 +52,10 @@ export default function Admin() {
       <CabeceraSeccion titulo="Estaciones particulares" />
       <div className="tarjeta">{particulares.length ? particulares.map((e) => <FilaEstacionPropia key={e.id} e={e} ahora={ahora} />) : <p className="vacio">Ninguna.</p>}</div>
 
-      <CabeceraSeccion titulo="Embalses" nota="Los que se muestran en la página Embalses (como mucho 20). El primero sale destacado arriba." />
+      <CabeceraSeccion titulo="Embalses" nota="Los que se muestran en la página Embalses (como mucho 20). «Por defecto»: los que ve destacados quien no tiene cuenta." />
       <GestionEmbalses />
 
-      <CabeceraSeccion titulo="Ríos" nota="Aforos que se muestran en la página Ríos (como mucho 20), de cualquier cuenca de España" />
+      <CabeceraSeccion titulo="Ríos" nota="Aforos de cualquier cuenca que gestiona el Estado. «Por defecto»: los que ve destacados quien no tiene cuenta." />
       <GestionRios />
 
       <CabeceraSeccion titulo="Usuarios" />
@@ -204,6 +204,14 @@ function GestionEmbalses() {
             </button>
             <button className="boton-mini" disabled={i === lista.length - 1} onClick={() => mover(i, 1)} aria-label="Bajar">
               ↓
+            </button>
+            <button
+              className={`boton-mini ${elegidos?.porDefecto.includes(e.slug) ? "marcado" : ""}`}
+              aria-pressed={!!elegidos?.porDefecto.includes(e.slug)}
+              title="Se ve destacado para quien no tiene cuenta"
+              onClick={() => accion(() => enviar("/api/admin/por-defecto", "PUT", { tipo: "embalse", slug: e.slug, destacado: !elegidos?.porDefecto.includes(e.slug) }))}
+            >
+              {elegidos?.porDefecto.includes(e.slug) ? "★ Por defecto" : "☆ Por defecto"}
             </button>
             <button className="boton-mini peligro" onClick={() => accion(() => enviar(`/api/admin/embalses/${e.slug}`, "DELETE"))}>
               Quitar

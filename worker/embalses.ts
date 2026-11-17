@@ -119,6 +119,10 @@ export function adaptarEmbalse(ficha: any, historico: any[] | null): Embalse {
   };
 }
 
+export async function embalsesPorDefecto(db: D1Database): Promise<string[]> {
+  return (await db.prepare("SELECT slug FROM embalses WHERE destacado = 1 ORDER BY orden").all<{ slug: string }>()).results.map((r) => r.slug);
+}
+
 export async function embalsesElegidos(db: D1Database): Promise<string[]> {
   return (await db.prepare("SELECT slug FROM embalses ORDER BY orden, creado").all<{ slug: string }>()).results.map((r) => r.slug);
 }
@@ -143,7 +147,7 @@ export async function estadoEmbalses(env: Env, ctx: Ctx): Promise<RespuestaEmbal
   );
   const embalses = lista.filter((e): e is Embalse => e !== null);
   const fechas = embalses.map((e) => e.fecha).filter((f): f is string => !!f).sort();
-  return { fecha: fechas.at(-1) ?? null, embalses, errores };
+  return { fecha: fechas.at(-1) ?? null, porDefecto: await embalsesPorDefecto(env.DB), embalses, errores };
 }
 
 /** Todos los embalses de España (para elegir), cacheado un día. */

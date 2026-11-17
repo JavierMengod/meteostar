@@ -3,7 +3,7 @@
 // se calcula una vez al día y se guarda en D1, para que cada visita lea una sola fila.
 import { anioHidrologico, diaHidrologico } from "../shared/hidrologia";
 import type { AnioAforo, CrecidaAforo, DiaAforo, ResumenAforo, RespuestaRio } from "../shared/tipos";
-import { type FilaAforo, aforoPorSlug, aforosConfigurados } from "./aforos";
+import { type FilaAforo, aforoPorSlug, aforosConfigurados, normalDeHoy } from "./aforos";
 import { fechaLocal } from "./fechas";
 import { calcularCorreccion, celdaDelAforo, climatologiaModelo, componerPrevision, historicoModelo, pedirReciente } from "./prevision-rio";
 
@@ -139,6 +139,8 @@ export async function calcularResumen(db: D1Database, a: FilaAforo): Promise<Res
     )
     .bind(a.slug, JSON.stringify(resumen))
     .run();
+  const hoy = normalDeHoy(resumen);
+  await db.prepare("UPDATE aforos SET normal_hoy = ? WHERE slug = ?").bind(hoy ? JSON.stringify(hoy) : null, a.slug).run();
   return resumen;
 }
 

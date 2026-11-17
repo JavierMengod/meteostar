@@ -37,6 +37,11 @@ const DEMARCACIONES: Record<string, string> = {
 
 /** Días que se muestran en la página de cada aforo */
 const DIAS = 30;
+/**
+ * Aforos que se leen en cada pasada (cada 10 minutos). Cada uno son 2 peticiones al Observatorio: así no se pasa
+ * del límite de peticiones de un Worker ni se satura el servicio. Con más aforos, se van turnando.
+ */
+const LOTE = 20;
 
 type Ctx = { waitUntil(p: Promise<unknown>): void };
 export type Lectura = [number, number | null, number | null];
@@ -56,6 +61,14 @@ export interface FilaAforo {
   celda_lat: number | null;
   celda_lon: number | null;
   orden: number;
+  destacado: number;
+  ultimo_t: number | null;
+  ultimo_caudal: number | null;
+  ultimo_nivel: number | null;
+  tendencia: number | null;
+  mini: string | null;
+  normal_hoy: string | null;
+  leido: number | null;
 }
 
 export async function aforosConfigurados(db: D1Database): Promise<FilaAforo[]> {
@@ -140,16 +153,39 @@ async function leerAforo(db: D1Database, a: FilaAforo): Promise<Lectura[]> {
   }
   const filas = juntar(caudal.puntos, nivel.puntos);
   await guardarLecturas(db, a.slug, filas);
+  await guardarUltimo(db, a.slug);
   return filas;
 }
 
-/** Tarea cada 10 minutos: lecturas nuevas de todos los aforos. */
+/** Copia en la fila del aforo su última lectura, la tendencia y la minigráfica (para la portada de Ríos). */
+export async function guardarUltimo(db: D1Database, slug: string): Promise<void> {
+  const serie = (
+    await db
+      .prepare("SELECT t, caudal, nivel FROM aforo_lecturas WHERE estacion = ? AND t >= unixepoch() - 49 * 3600 ORDER BY t")
+      .bind(slug)
+      .all<{ t: number; caudal: number | null; nivel: number | null }>()
+  ).results.map((r) => [r.t, r.caudal, r.nivel] as Lectura);
+  const u = ultimaLectura(serie);
+  await db
+    .prepare("UPDATE aforos SET ultimo_t = ?, ultimo_caudal = ?, ultimo_nivel = ?, tendencia = ?, mini = ?, leido = unixepoch() WHERE slug = ?")
+    .bind(u?.t ?? null, u?.caudal ?? null, u?.nivel ?? null, tendencia(serie), JSON.stringify(miniSerie(serie)), slug)
+    .run();
+}
+
+/** Tarea cada 10 minutos: lecturas nuevas de los aforos que llevan más tiempo sin leerse (como mucho LOTE). */
 export async function actualizarAforos(env: Env): Promise<void> {
-  for (const a of await aforosConfigurados(env.DB)) {
+  const pendientes = (
+    await env.DB.prepare("SELECT * FROM aforos WHERE leido IS NULL OR leido < unixepoch() - 540 ORDER BY leido IS NOT NULL, leido LIMIT ?")
+      .bind(LOTE)
+      .all<FilaAforo>()
+  ).results;
+  for (const a of pendientes) {
     try {
       await leerAforo(env.DB, a);
     } catch (e) {
       console.error("aforo", a.slug, e);
+      // Se marca como leído igualmente para que un aforo que falla no bloquee a los demás
+      await env.DB.prepare("UPDATE aforos SET leido = unixepoch() WHERE slug = ?").bind(a.slug).run();
     }
   }
 }
@@ -187,14 +223,16 @@ export function reducir(serie: Lectura[], ahora = Date.now() / 1000) {
   return out;
 }
 
-/** Caudal de las últimas 48 h, una lectura por hora (para la minigráfica de la tarjeta). */
+/** Caudal (o nivel, si el aforo no da caudal) de las últimas 48 h, una lectura por hora, para la minigráfica. */
 export function miniSerie(serie: Lectura[], ahora = Date.now() / 1000): [number, number][] {
+  const columna = serie.some((s) => s[1] !== null) ? 1 : 2;
   const out: [number, number][] = [];
   let horaAnterior = -1;
-  for (const [t, c] of serie) {
-    if (t < ahora - 48 * 3600 || c === null) continue;
-    const h = Math.floor(t / 3600);
-    if (h !== horaAnterior) out.push([t, c]);
+  for (const p of serie) {
+    const v = p[columna];
+    if (p[0] < ahora - 48 * 3600 || v === null) continue;
+    const h = Math.floor(p[0] / 3600);
+    if (h !== horaAnterior) out.push([p[0], v]);
     horaAnterior = h;
   }
   return out;
@@ -218,28 +256,27 @@ async function lecturas(db: D1Database, a: FilaAforo, dias: number): Promise<Lec
   }
 }
 
-async function normalHoy(db: D1Database, slug: string): Promise<Aforo["normalHoy"]> {
-  const fila = await db.prepare("SELECT datos FROM aforo_resumen WHERE estacion = ?").bind(slug).first<{ datos: string }>();
-  if (!fila) return null;
-  const r: ResumenAforo = JSON.parse(fila.datos);
+/** Lo normal para hoy según el resumen del aforo (lo guarda la tarea diaria en la fila del aforo). */
+export function normalDeHoy(r: ResumenAforo): Aforo["normalHoy"] {
   return r.normal[diaHidrologico(fechaLocal(Date.now() / 1000))] ?? null;
 }
 
-function tarjeta(a: FilaAforo, serie: Lectura[], normal: Aforo["normalHoy"]): Aforo {
+/** Tarjeta de un aforo a partir de su fila (sin recorrer las lecturas). */
+export function tarjeta(a: FilaAforo): Aforo {
   return {
     ...configDe(a),
-    ultimo: ultimaLectura(serie),
-    tendencia: tendencia(serie),
+    ultimo: a.ultimo_t ? { t: a.ultimo_t, caudal: a.ultimo_caudal, nivel: a.ultimo_nivel } : null,
+    tendencia: a.tendencia,
     umbrales: a.umbrales ? JSON.parse(a.umbrales) : [],
-    normalHoy: normal,
-    mini: miniSerie(serie),
+    normalHoy: a.normal_hoy ? JSON.parse(a.normal_hoy) : null,
+    mini: a.mini ? JSON.parse(a.mini) : [],
   };
 }
 
-/** Todos los aforos, para la portada de Ríos. */
-export async function estadoAforos(env: Env): Promise<Aforo[]> {
-  const aforos = await aforosConfigurados(env.DB);
-  return Promise.all(aforos.map(async (a) => tarjeta(a, await lecturas(env.DB, a, 2), await normalHoy(env.DB, a.slug))));
+/** Todos los aforos (una fila por río) y los que se ven por defecto sin cuenta. */
+export async function estadoAforos(env: Env): Promise<{ aforos: Aforo[]; porDefecto: string[] }> {
+  const filas = await aforosConfigurados(env.DB);
+  return { aforos: filas.map(tarjeta), porDefecto: filas.filter((a) => a.destacado).map((a) => a.slug) };
 }
 
 const distanciaKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -268,7 +305,16 @@ export async function detalleAforo(env: Env, slug: string): Promise<DetalleAforo
     lluvia = { slug: e.slug, nombre: e.nombre, km: Math.round(km), dias: dias.map((d) => [d.fecha, d.lluvia]) };
     break;
   }
-  return { ...tarjeta(a, serie, await normalHoy(env.DB, slug)), serie: reducir(serie), lluvia, tieneHistorico: !!historico };
+  return {
+    ...tarjeta(a),
+    // La última lectura y la tendencia, de las lecturas (por si la fila aún no se ha actualizado)
+    ultimo: ultimaLectura(serie) ?? tarjeta(a).ultimo,
+    tendencia: tendencia(serie),
+    mini: miniSerie(serie),
+    serie: reducir(serie),
+    lluvia,
+    tieneHistorico: !!historico,
+  };
 }
 
 /** Catálogo de aforos del Observatorio (para añadirlos), cacheado un día. */
@@ -336,6 +382,8 @@ export async function anadirAforo(
   )
     .bind(slug, datos.nombre, datos.rio, codigo, datos.elemento, cat.demarcacion || null, cat.lat, cat.lon, datos.embalse, datos.reguladoDesde)
     .run();
+  const nuevo = await aforoPorSlug(env.DB, slug);
+  if (nuevo) ctx.waitUntil(leerAforo(env.DB, nuevo).catch((e) => console.error("aforo nuevo", slug, e)));
   return { slug };
 }
 
@@ -347,5 +395,6 @@ export async function quitarAforo(db: D1Database, slug: string): Promise<void> {
     db.prepare("DELETE FROM aforo_diario WHERE estacion = ?").bind(slug),
     db.prepare("DELETE FROM aforo_max_mensual WHERE estacion = ?").bind(slug),
     db.prepare("DELETE FROM aforo_resumen WHERE estacion = ?").bind(slug),
+    db.prepare("DELETE FROM favoritos WHERE tipo = 'rio' AND slug = ?").bind(slug),
   ]);
 }
