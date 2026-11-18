@@ -4213,3 +4213,17 @@ h3 {
   width: 12px;
   height: 12px;
 }
+
+/* Estaciones oficiales (AEMET) en el mapa y en la lista: cuadradas */
+.punto-mapa.oficial span,
+.punto-rio.oficial {
+  border-radius: 3px;
+}
+.punto-mapa.oficial span {
+  outline: 1.5px solid var(--tinta);
+}
+.leyenda-rios i.leyenda-oficial {
+  background: #0e9f6e;
+  border-radius: 2px;
+  outline: 1.5px solid var(--tinta);
+}

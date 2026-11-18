@@ -53,7 +53,7 @@ const icono = (p: PuntoMapa, pequeno = false) =>
 /** Solo un punto de color (sin etiqueta); el nombre y el dato salen al pasar el ratón o tocarlo. */
 const iconoPunto = (p: PuntoMapa) =>
   L.divIcon({
-    className: `punto-mapa ${p.atenuado ? "atenuado" : ""} ${p.discreto ? "discreto" : ""}`,
+    className: `punto-mapa ${p.oficial ? "oficial" : ""} ${p.atenuado ? "atenuado" : ""} ${p.discreto ? "discreto" : ""}`,
     html: `${abrir(p, ` aria-label="${escapar(p.nombre)}"`)}<span${p.color ? ` style="background:${escapar(p.color)}"` : ""}></span>${cerrar(p)}`,
     iconSize: [16, 16],
   });

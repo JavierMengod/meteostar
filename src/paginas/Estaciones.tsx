@@ -73,7 +73,11 @@ function FilaEstacion({ d, ahora, seg }: { d: RespuestaDatos; ahora: number; seg
 function FilaLibre({ e, ahora, onElegir }: { e: EstacionExterna; ahora: number; onElegir: () => void }) {
   return (
     <button type="button" className="fila-rio fila-libre" onClick={onElegir}>
-      <i className="punto-rio" style={{ background: e.fuente === "wunderground" && e.temp === null ? COLOR_AL_PULSAR : colorTemp(e.temp), opacity: 0.6 }} aria-hidden="true" />
+      <i
+        className={`punto-rio ${e.fuente === "aemet" ? "oficial" : ""}`}
+        style={{ background: e.fuente === "wunderground" && e.temp === null ? COLOR_AL_PULSAR : colorTemp(e.temp), opacity: e.fuente === "aemet" ? 1 : 0.6 }}
+        aria-hidden="true"
+      />
       <span className="fila-rio-nombre">
         <b>{e.nombre}</b>
         <small className="suave">
@@ -274,6 +278,9 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
   const grupos = (["particular", "oficial", "externa"] as const).map((t) => [t, filtradas.filter((d) => d.estacion.tipo === t)] as const).filter(([, l]) => l.length);
   const libreElegida = libres.find((e) => e.codigo === elegida) ?? null;
   const total = filtradas.length + libresFiltradas.length;
+  // En la lista, las oficiales de AEMET en su propio grupo, separadas de las de aficionados
+  const libresAemet = libresFiltradas.filter((e) => e.fuente === "aemet");
+  const libresAficionados = libresFiltradas.filter((e) => e.fuente !== "aemet");
   const abierto = (clave: string) => !!q || !!tipo || abiertos.has(clave);
   const cambiar = (clave: string) => (a: boolean) =>
     setAbiertos((prev) => {
@@ -293,7 +300,7 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
       <section className="cabecera-embalses">
         <h1>Estaciones</h1>
         <p className="suave">
-          Las estaciones meteorológicas de la zona: las de Meteostar y las de aficionados que publican en Meteoclimatic y Weather Underground. Pulsa una estación para ver sus datos;
+          Las estaciones meteorológicas de la zona: las de Meteostar, las oficiales de AEMET y las de aficionados que publican en Meteoclimatic y Weather Underground. Pulsa una estación para ver sus datos;
           las dadas de alta en Meteostar tienen además sus gráficas y su histórico.
         </p>
       </section>
@@ -373,7 +380,8 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
                 valor: e.temp,
                 href: `${e.fuente}:${e.codigo}`,
                 color: e.fuente === "wunderground" && e.temp === null ? COLOR_AL_PULSAR : colorTemp(e.temp),
-                atenuado: true,
+                // Las de AEMET, cuadradas y sin apagar (son de referencia); las de aficionados, apagadas
+                atenuado: e.fuente !== "aemet",
                 oficial: e.fuente === "aemet",
                 // Las de Weather Underground sin dato (hasta que se pulsan): pequeñas y por debajo de las que sí lo tienen
                 discreto: e.temp === null,
@@ -403,7 +411,7 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
             <i style={{ background: color }} /> {texto}{" "}
           </Fragment>
         ))}
-        <i style={{ background: COLOR_SIN_DATOS }} /> Sin datos <i className="leyenda-libre" /> Sin dar de alta <i className="leyenda-libre" style={{ background: COLOR_AL_PULSAR }} />{" "}
+        <i style={{ background: COLOR_SIN_DATOS }} /> Sin datos <i className="leyenda-oficial" /> Oficial (AEMET) <i className="leyenda-libre" /> Sin dar de alta <i className="leyenda-libre" style={{ background: COLOR_AL_PULSAR }} />{" "}
         Weather Underground (dato al pulsar)
       </p>
       {libreElegida && <FichaLibre e={libreElegida} ahora={ahora} usuario={usuario ?? null} onCerrar={() => setElegida(null)} onDato={(c, d) => setPedidos((p) => ({ ...p, [c]: d }))} />}
@@ -423,14 +431,26 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
               ))}
             </Grupo>
           ))}
-          {libresFiltradas.length > 0 && (
+          {libresAemet.length > 0 && (
             <Grupo
-              titulo="Más estaciones de la zona"
-              resumen={`${libresFiltradas.length} sin dar de alta · Meteoclimatic y Weather Underground`}
+              titulo="Oficiales de AEMET"
+              resumen={`${libresAemet.length} sin dar de alta · ${libresAemet.filter((e) => e.temp !== null).length} con dato · se actualizan cada hora`}
+              abierto={abierto("aemet")}
+              onCambio={cambiar("aemet")}
+            >
+              {libresAemet.map((e) => (
+                <FilaLibre key={e.codigo} e={e} ahora={ahora} onElegir={() => elegir(e.codigo)} />
+              ))}
+            </Grupo>
+          )}
+          {libresAficionados.length > 0 && (
+            <Grupo
+              titulo="Más estaciones de aficionados"
+              resumen={`${libresAficionados.length} sin dar de alta · Meteoclimatic y Weather Underground`}
               abierto={abierto("libres")}
               onCambio={cambiar("libres")}
             >
-              {libresFiltradas.map((e) => (
+              {libresAficionados.map((e) => (
                 <FilaLibre key={e.codigo} e={e} ahora={ahora} onElegir={() => elegir(e.codigo)} />
               ))}
             </Grupo>
