@@ -4,6 +4,7 @@ import type { InfoConector, Lectura } from "../shared/tipos";
 import { puntoRocio, redondear, sensacionTermica } from "../shared/meteo";
 import { leerRespuestaApi, urlApiEcowitt } from "./ecowitt";
 import { fechaLocal } from "./fechas";
+import { bloqueEstacion, feedProvincia, regionDe } from "./meteoclimatic";
 
 /** Extremos del día que da la propia fuente (por si las lecturas no los recogen todos). */
 export interface ExtremosDia {
@@ -101,8 +102,9 @@ async function leerWU(config: Record<string, string>): Promise<ResultadoLectura>
 
 // ----- Meteoclimatic -----
 
-/** Lee el XML público de una estación de Meteoclimatic (https://www.meteoclimatic.net/feed/xml/CODIGO). */
-export function leerMeteoclimatic(xml: string): ResultadoLectura {
+/** Lee el XML público de Meteoclimatic: el de una estación o, con «codigo», el de su provincia (trae todas). */
+export function leerMeteoclimatic(xmlEntero: string, codigo?: string): ResultadoLectura {
+  const xml = codigo ? (bloqueEstacion(xmlEntero, codigo) ?? "") : xmlEntero;
   const bloque = (nombre: string) => xml.match(new RegExp(`<${nombre}>([\\s\\S]*?)</${nombre}>`))?.[1] ?? "";
   const valor = (texto: string, etiqueta: string) => num(texto.match(new RegExp(`<${etiqueta}>([^<]*)</${etiqueta}>`))?.[1]);
   const estacion = bloque("station");
@@ -145,9 +147,8 @@ async function textoLatin(r: Response): Promise<string> {
 async function leerMC(config: Record<string, string>): Promise<ResultadoLectura> {
   const codigo = config.codigo.trim().toUpperCase();
   if (!/^[A-Z0-9]{10,25}$/.test(codigo)) throw new Error("Código de Meteoclimatic no válido");
-  const r = await fetch(`https://www.meteoclimatic.net/feed/xml/${codigo}`, { signal: AbortSignal.timeout(20_000) });
-  if (!r.ok) throw new Error(`Meteoclimatic HTTP ${r.status}`);
-  return leerMeteoclimatic(await textoLatin(r));
+  // El feed de la provincia: una petición para todas sus estaciones, en caché unos minutos
+  return leerMeteoclimatic(await feedProvincia(regionDe(codigo)), codigo);
 }
 
 // ----- AEMET OpenData (estaciones oficiales) -----

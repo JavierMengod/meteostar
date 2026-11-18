@@ -23,7 +23,7 @@ interface Formulario {
   config: Record<string, string>;
   publica: boolean;
   activa: boolean;
-  tipo: "particular" | "oficial";
+  tipo: "particular" | "oficial" | "externa";
   red: string;
 }
 

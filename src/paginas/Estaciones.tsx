@@ -1,6 +1,6 @@
 // Estaciones: igual que las páginas de ríos y embalses. Arriba las que sigue el usuario (sin cuenta, la de la web:
 // Villastar); debajo, todas las estaciones con buscador, filtro, mapa y lista desplegable (las de la red y las oficiales).
-import { lazy, Suspense, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useMemo, useState } from "react";
 import type { RespuestaDatos, RespuestaRed } from "../../shared/tipos";
 import BotonSeguir from "../componentes/BotonSeguir";
 import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
@@ -16,7 +16,7 @@ type Seguidos = ReturnType<typeof useSeguidos>;
 
 const quitarAcentos = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-const GRUPOS = { particular: "Estaciones de la red", oficial: "Estaciones oficiales" } as const;
+const GRUPOS = { particular: "Estaciones de la red", oficial: "Estaciones oficiales", externa: "Otras redes de aficionados" } as const;
 
 /** Fila compacta de la lista de todas las estaciones. */
 function FilaEstacion({ d, ahora, seg }: { d: RespuestaDatos; ahora: number; seg: Seguidos }) {
@@ -29,7 +29,7 @@ function FilaEstacion({ d, ahora, seg }: { d: RespuestaDatos; ahora: number; seg
       <span className="fila-rio-nombre">
         <b>{e.nombre}</b>
         <small className="suave">
-          {e.tipo === "oficial" ? `${e.red ?? "Oficial"} · ` : ""}
+          {e.tipo !== "particular" ? `${e.red ?? "Oficial"} · ` : ""}
           {e.municipio} · {e.altitud} m
         </small>
       </span>
@@ -109,15 +109,15 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
   // Misma escala de temperatura en todas las tarjetas, para poder compararlas
   const extremos = destacadas.flatMap((d) => [d.hoy?.tmin, d.hoy?.tmax, d.actual?.temp]).filter((v): v is number => typeof v === "number");
   const escala: [number, number] | undefined = extremos.length ? [Math.min(...extremos) - 2, Math.max(...extremos) + 2] : undefined;
-  const grupos = (["particular", "oficial"] as const).map((t) => [t, filtradas.filter((d) => d.estacion.tipo === t)] as const).filter(([, l]) => l.length);
-  const hayOficiales = estaciones.some((d) => d.estacion.tipo === "oficial");
+  const grupos = (["particular", "oficial", "externa"] as const).map((t) => [t, filtradas.filter((d) => d.estacion.tipo === t)] as const).filter(([, l]) => l.length);
+  const hayOtras = estaciones.some((d) => d.estacion.tipo !== "particular");
 
   return (
     <>
       <section className="cabecera-embalses">
         <h1>Estaciones</h1>
         <p className="suave">
-          Las estaciones de la red, de aficionados de la zona, y las oficiales cercanas. Pulsa una estación para ver todos sus datos, sus gráficas y su histórico.
+          Las estaciones de la red, de aficionados de la zona; las oficiales cercanas, y otras de aficionados que publican en Meteoclimatic. Pulsa una estación para ver todos sus datos, sus gráficas y su histórico.
         </p>
       </section>
 
@@ -165,11 +165,12 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
       {estaciones.length > 4 && (
         <div className="filtros-rios">
           <input type="search" value={busca} placeholder="Buscar una estación o un pueblo…" onChange={(e) => setBusca(e.target.value)} aria-label="Buscar una estación" />
-          {hayOficiales && (
+          {hayOtras && (
             <select value={tipo} onChange={(e) => setTipo(e.target.value)} aria-label="Tipo de estación">
               <option value="">Todas</option>
               <option value="particular">De la red</option>
               <option value="oficial">Oficiales</option>
+              <option value="externa">Otras redes</option>
             </select>
           )}
         </div>
@@ -200,9 +201,9 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
       )}
       <p className="leyenda-rios suave pequeno">
         {ESCALA_TEMP.map(([, color, texto]) => (
-          <span key={texto}>
+          <Fragment key={texto}>
             <i style={{ background: color }} /> {texto}{" "}
-          </span>
+          </Fragment>
         ))}
         <i style={{ background: COLOR_SIN_DATOS }} /> Sin datos
       </p>
@@ -235,7 +236,11 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
         <a href="https://opendata.aemet.es/" target="_blank" rel="noreferrer">
           AEMET OpenData
         </a>{" "}
-        (© AEMET, datos horarios) · <a href="/fuentes">Fuentes</a>
+        (© AEMET, datos horarios) · Otras redes:{" "}
+        <a href="https://www.meteoclimatic.net/" target="_blank" rel="noreferrer">
+          Meteoclimatic
+        </a>{" "}
+        (CC BY-NC-ND) · <a href="/fuentes">Fuentes</a>
       </p>
     </>
   );

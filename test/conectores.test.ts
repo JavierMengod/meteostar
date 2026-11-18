@@ -27,6 +27,14 @@ describe("Meteoclimatic", () => {
   it("falla si la estación no existe", () => {
     expect(() => leerMeteoclimatic("<meteodata><stations></stations></meteodata>")).toThrow();
   });
+
+  it("toma su estación del feed de la provincia (que trae varias)", () => {
+    const otra = xml.replace("ESARA4400000044000A", "ESARA4400000044999B").replace("<now>12.2</now>", "<now>3.5</now>");
+    const provincia = otra.replace("</stations>", xml.slice(xml.indexOf("<station>"), xml.indexOf("</stations>")) + "</stations>");
+    expect(leerMeteoclimatic(provincia, "ESARA4400000044000A").lecturas[0].temp).toBe(12.2);
+    expect(leerMeteoclimatic(provincia, "ESARA4400000044999B").lecturas[0].temp).toBe(3.5);
+    expect(() => leerMeteoclimatic(provincia, "ESARA4400000044123C")).toThrow();
+  });
 });
 
 describe("Weather Underground", () => {

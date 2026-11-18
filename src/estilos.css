@@ -3954,3 +3954,81 @@ h3 {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
+/* Administración › Estaciones de otras redes */
+.gestion-externas {
+  display: grid;
+  gap: 12px;
+}
+.externas-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.externas-cabecera select {
+  margin-left: 6px;
+}
+.externas-cuerpo {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.externas-cuerpo .mapa {
+  margin: 0;
+}
+.externas-ficha {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.externas-ficha h3 {
+  margin: 0;
+}
+.externas-ficha p {
+  margin: 0;
+}
+.botones-ficha {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.aviso-externas {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--superficie-2);
+  font-size: 0.85rem;
+}
+.lista-externas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lista-externas button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: var(--superficie);
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.lista-externas button.activa {
+  border-color: var(--estrella);
+}
+.lista-externas i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+@media (max-width: 760px) {
+  .externas-cuerpo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

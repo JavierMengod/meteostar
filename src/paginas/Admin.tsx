@@ -1,5 +1,5 @@
 // Administración: invitaciones, usuarios y todas las estaciones (incluidas las oficiales).
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { EmbalseCatalogo, EstacionPropia, Invitacion, RespuestaEmbalses } from "../../shared/tipos";
 import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
 import { enviar, navegar, usePeticion, useSesion } from "../datos";
@@ -7,6 +7,8 @@ import { fechaCorta, fechaDe } from "../formato";
 import { Campo } from "./Acceso";
 import { FilaEstacionPropia } from "./Cuenta";
 import GestionRios from "./GestionRios";
+
+const GestionExternas = lazy(() => import("./GestionExternas"));
 
 interface ResumenAdmin {
   usuarios: { id: number; nombre: string; email: string; rol: string; creado: number; estaciones: number }[];
@@ -24,13 +26,14 @@ export default function Admin() {
   const ahora = Math.floor(Date.now() / 1000);
   const particulares = datos.estaciones.filter((e) => e.tipo === "particular");
   const oficiales = datos.estaciones.filter((e) => e.tipo === "oficial");
+  const externas = datos.estaciones.filter((e) => e.tipo === "externa");
 
   return (
     <>
       <div className="titulo-pagina">
         <h1>Administración</h1>
         <p className="suave">
-          {datos.usuarios.length} usuarios · {particulares.length} estaciones particulares · {oficiales.length} oficiales
+          {datos.usuarios.length} usuarios · {particulares.length} estaciones particulares · {oficiales.length} oficiales · {externas.length} de otras redes
         </p>
       </div>
 
@@ -51,6 +54,11 @@ export default function Admin() {
 
       <CabeceraSeccion titulo="Estaciones particulares" />
       <div className="tarjeta">{particulares.length ? particulares.map((e) => <FilaEstacionPropia key={e.id} e={e} ahora={ahora} />) : <p className="vacio">Ninguna.</p>}</div>
+
+      <CabeceraSeccion id="otras-redes" titulo="Estaciones de otras redes" nota="Meteoclimatic: pulsa una estación del mapa para añadirla a Meteostar o quitarla" />
+      <Suspense fallback={<div className="tarjeta" style={{ minHeight: 480 }} />}>
+        <GestionExternas />
+      </Suspense>
 
       <CabeceraSeccion id="embalses" titulo="Embalses" nota="Los que se muestran en la página Embalses (como mucho 20). «Por defecto»: los que ve destacados quien no tiene cuenta." />
       <GestionEmbalses />

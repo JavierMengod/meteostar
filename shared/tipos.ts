@@ -46,7 +46,8 @@ export interface ResumenDiario {
 export interface Estacion {
   id: number;
   slug: string;
-  tipo: "particular" | "oficial";
+  /** particular: de la red de Meteostar · oficial: AEMET… · externa: de otra red de aficionados (Meteoclimatic) */
+  tipo: "particular" | "oficial" | "externa";
   red: string | null;
   nombre: string;
   municipio: string;
@@ -510,3 +511,19 @@ export interface ResumenAforo {
 
 /** [fecha, caudal medio, origen: a = anuario, m = medido en tiempo real] */
 export type DiaAforo = [string, number | null, "a" | "m"];
+
+/** Estación de otra red (Meteoclimatic) en el mapa de Administración. */
+export interface EstacionExterna {
+  codigo: string;
+  fuente: "meteoclimatic";
+  nombre: string;
+  lat: number;
+  lon: number;
+  /** Última actualización (segundos Unix) */
+  t: number | null;
+  temp: number | null;
+  /** Calidad según Meteoclimatic (0 = buena) */
+  qos: number | null;
+  /** Si ya está en Meteostar: como externa o como estación de la red que publica allí */
+  enMeteostar: { slug: string; nombre: string; externa: boolean } | null;
+}

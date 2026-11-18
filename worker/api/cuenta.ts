@@ -30,6 +30,8 @@ import {
   type FilaEstacion,
 } from "../estaciones";
 import { ahora } from "./publica";
+import { anadirExterna, catalogoExternas, quitarExterna } from "../externas";
+import { PROVINCIAS_MC } from "../meteoclimatic";
 
 type Entorno = { Bindings: Env; Variables: { usuario: Usuario } };
 const app = new Hono<Entorno>();
@@ -373,6 +375,32 @@ app.post("/admin/invitaciones", async (c) => {
 app.delete("/admin/invitaciones/:codigo", async (c) => {
   await c.env.DB.prepare("DELETE FROM invitaciones WHERE codigo = ? AND usada IS NULL").bind(c.req.param("codigo")).run();
   return c.json({ ok: true });
+});
+
+// ----- Estaciones de otras redes (Meteoclimatic), desde el mapa -----
+
+app.get("/admin/externas/provincias", (c) => c.json(PROVINCIAS_MC));
+
+app.get("/admin/externas/catalogo", async (c) => {
+  const region = c.req.query("provincia") ?? "ESARA44";
+  if (!PROVINCIAS_MC[region]) return c.json({ error: "Provincia no válida" }, 400);
+  try {
+    return c.json(await catalogoExternas(c.env.DB, region));
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "No se ha podido leer Meteoclimatic" }, 502);
+  }
+});
+
+app.post("/admin/externas", async (c) => {
+  const codigo = texto((await cuerpo(c))?.codigo, 30).toUpperCase();
+  const r = await anadirExterna(c.env, c.get("usuario").id, codigo);
+  return "error" in r ? c.json(r, 400) : c.json(r);
+});
+
+app.delete("/admin/externas/:codigo", async (c) => {
+  const ok = await quitarExterna(c.env.DB, c.req.param("codigo").toUpperCase());
+  return ok ? c.json({ ok: true }) : c.json({ error: "No está en Meteostar" }, 404);
 });
 
 // ----- Embalses que se muestran -----

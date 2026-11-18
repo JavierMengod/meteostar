@@ -13,7 +13,7 @@ export interface FilaEstacion {
   usuario_id: number | null;
   /** Se ve destacada por defecto (sin cuenta) */
   destacado: number;
-  tipo: "particular" | "oficial";
+  tipo: "particular" | "oficial" | "externa";
   red: string | null;
   nombre: string;
   municipio: string;
@@ -202,7 +202,8 @@ export async function validarEstacion(
     if (puestos.length && puestos.length < 3) return { error: "Para la reserva de ecowitt.net hacen falta las tres claves (o ninguna)" };
   }
 
-  const tipo = esAdmin && d.tipo === "oficial" ? "oficial" : "particular";
+  // Las externas (otras redes, añadidas desde el mapa de Administración) siguen siéndolo al editarlas
+  const tipo = anterior?.tipo === "externa" ? "externa" : esAdmin && d.tipo === "oficial" ? "oficial" : "particular";
   return {
     valores: {
       nombre,
@@ -219,7 +220,7 @@ export async function validarEstacion(
       publica: d.publica === false ? 0 : 1,
       activa: d.activa === false ? 0 : 1,
       tipo,
-      red: tipo === "oficial" ? texto(d.red, 40) || null : null,
+      red: tipo === "externa" ? anterior!.red : tipo === "oficial" ? texto(d.red, 40) || null : null,
     },
   };
 }

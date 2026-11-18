@@ -9,6 +9,7 @@ export default function TarjetaEstacion({ d, escala, accion }: { d: RespuestaDat
   const { estacion: e, actual: a, hoy } = d;
   const viento = a?.viento ?? null;
   const oficial = e.tipo === "oficial";
+  const externa = e.tipo === "externa";
   return (
     <a href={`/estacion/${e.slug}`} className={`tarjeta tarjeta-estacion enlace ${oficial ? "oficial" : ""}`}>
       <div className="te-cabecera">
@@ -24,6 +25,7 @@ export default function TarjetaEstacion({ d, escala, accion }: { d: RespuestaDat
         </span>
       </div>
       {oficial && <span className="insignia">{e.red ?? "Oficial"} · datos horarios</span>}
+      {externa && <span className="insignia">{e.red ?? "Otra red"} · cada 10 min</span>}
       {a ? (
         <>
           <div className="te-temp">

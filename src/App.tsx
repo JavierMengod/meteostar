@@ -33,7 +33,7 @@ export default function App() {
         ...red.estaciones.map((d) => ({
           clave: `e:${d.estacion.slug}`,
           nombre: d.estacion.nombre,
-          grupo: d.estacion.tipo === "oficial" ? "Estaciones oficiales" : "Estaciones",
+          grupo: d.estacion.tipo === "oficial" ? "Estaciones oficiales" : d.estacion.tipo === "externa" ? "Otras redes" : "Estaciones",
           lat: d.estacion.lat,
           lon: d.estacion.lon,
           altitud: d.estacion.altitud,

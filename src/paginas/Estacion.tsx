@@ -65,7 +65,7 @@ export default function Estacion({ slug, prevision }: Props) {
         alineacion="derecha"
         antetitulo={
           <span className="mono">
-            {estacion.tipo === "oficial" ? `${estacion.red ?? "OFICIAL"} · ` : ""}
+            {estacion.tipo !== "particular" ? `${(estacion.red ?? "OFICIAL").toUpperCase()} · ` : ""}
             {estacion.municipio.toUpperCase()} · {estacion.altitud} M DE ALTITUD
           </span>
         }
@@ -535,6 +535,8 @@ function FichaEstacion({ estacion: e }: { estacion: InfoEstacion }) {
         {e.descripcion ??
           (e.tipo === "oficial"
             ? `Estación oficial de ${e.red ?? "una red pública"} en ${e.municipio} (${e.provincia}), a ${e.altitud} metros sobre el nivel del mar.`
+            : e.tipo === "externa"
+              ? `Estación de aficionado de la red ${e.red ?? "Meteoclimatic"} en ${e.municipio} (${e.provincia}), a unos ${e.altitud} metros sobre el nivel del mar. Sus datos son los que publica en ${e.red ?? "Meteoclimatic"} (licencia CC BY-NC-ND), cada 10 minutos.`
             : `Estación meteorológica particular en ${e.municipio} (${e.provincia}), a ${e.altitud} metros sobre el nivel del mar.`)}
       </p>
       <dl className="ficha-datos">
