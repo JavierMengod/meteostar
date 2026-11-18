@@ -8,13 +8,12 @@ import { faseDelDia } from "../componentes/Paisaje";
 import { CabeceraSeccion, Cargando, Hero } from "../componentes/Piezas";
 import TarjetaEstacion from "../componentes/TarjetaEstacion";
 import { usePeticion } from "../datos";
+import { enDirecto as estaEnDirecto } from "../estaciones";
 import { capital, diaSemana, fechaCorta, hora, n } from "../formato";
 import { descripcion, textoDia } from "../prevision";
 
 const Mapa = lazy(() => import("../componentes/Mapa"));
 
-/** Una lectura vale para la red si tiene menos de 20 minutos (90 en las fuentes horarias). */
-const reciente = (ts: number | undefined, ahora: number, horaria: boolean) => ts !== undefined && ahora - ts < (horaria ? 5400 : 1200);
 const media = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null);
 const maximo = (v: number[]) => (v.length ? Math.max(...v) : null);
 
@@ -24,9 +23,11 @@ export default function Red({ red, prevision }: { red: RespuestaRed | null; prev
   const { ahora } = red;
   const particulares = red.estaciones.filter((d) => d.estacion.tipo === "particular");
   const oficiales = red.estaciones.filter((d) => d.estacion.tipo === "oficial");
-  const enDirecto = red.estaciones.filter((d) => reciente(d.actual?.ts, ahora, d.estacion.fuente === "aemet"));
+  const enDirecto = red.estaciones.filter((d) => estaEnDirecto(d, ahora));
+  // Las medias de la cabecera, solo con las estaciones de la red (las oficiales son horarias y van aparte)
+  const deLaRed = enDirecto.filter((d) => d.estacion.tipo === "particular");
   const valores = (f: (d: (typeof enDirecto)[number]) => number | null | undefined) =>
-    enDirecto.map(f).filter((v): v is number => v !== null && v !== undefined);
+    deLaRed.map(f).filter((v): v is number => v !== null && v !== undefined);
   const fase = faseDelDia(ahora, prevision?.dias[0]?.salida, prevision?.dias[0]?.puesta);
   // Misma escala de temperatura en todas las tarjetas, para poder compararlas
   const extremosHoy = red.estaciones.flatMap((d) => [d.hoy?.tmin, d.hoy?.tmax, d.actual?.temp]).filter((v): v is number => typeof v === "number");
@@ -107,7 +108,7 @@ export default function Red({ red, prevision }: { red: RespuestaRed | null; prev
             lat: d.estacion.lat,
             lon: d.estacion.lon,
             nombre: d.estacion.nombre,
-            valor: reciente(d.actual?.ts, ahora, d.estacion.fuente === "aemet") ? (d.actual?.temp ?? null) : null,
+            valor: estaEnDirecto(d, ahora) ? (d.actual?.temp ?? null) : null,
             href: `/estacion/${d.estacion.slug}`,
             oficial: d.estacion.tipo === "oficial",
           }))}
