@@ -6,6 +6,7 @@ import { leerEstaciones } from "./cron";
 import { borrarAntiguas } from "./db";
 import { actualizarAforos } from "./aforos";
 import { avanzarCalculos } from "./calculos-aforos";
+import { refrescarEmbalses } from "./embalses";
 import { actualizarHistorico, refrescarResumenes } from "./historico-aforos";
 import { archivarRadar } from "./radar";
 import { actualizarSatelite } from "./seguimiento";
@@ -37,6 +38,7 @@ export default {
         actualizarAforos(env)
           .then(() => avanzarCalculos(env, 1))
           .then(() => refrescarResumenes(env, 1))
+          .then(() => refrescarEmbalses(env, ctx, 1))
           .catch((e) => console.error("aforos", e)),
       );
       return;

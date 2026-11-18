@@ -1,7 +1,8 @@
 // Embalses: API pública de MapasDeEmbalses.es (https://mapasdeembalses.es/aviso-legal/#legal-api).
 // Datos del boletín semanal del MITECO y, cuando lo hay, el dato reciente del SAIH de cada cuenca.
-// Condición de uso: atribución visible a MapasDeEmbalses.es y a la fuente original, y consultas razonables
-// (aquí, todo pasa por la caché del Worker: 1 h el estado y 6 h el histórico).
+// Condición de uso: atribución visible a MapasDeEmbalses.es y a la fuente original, y consultas razonables.
+// El estado de cada embalse se guarda en la base de datos (embalses.datos) y lo refresca la tarea de los aforos,
+// un embalse por pasada, como mucho una vez por hora: la página de embalses no pide nada fuera.
 import type { DetalleEmbalse, Embalse, EmbalseCatalogo, RespuestaEmbalses, SemanaEmbalse } from "../shared/tipos";
 import { localAUnix } from "./fechas";
 
@@ -95,17 +96,20 @@ export function adaptarEmbalse(ficha: any, historico: any[] | null): Embalse {
     }
   }
   const { haceUnAnio, mediaSemana } = comparar(semanasDe(historico), obs.fecha ?? null);
+  // Embalses sin dato semanal en el boletín (Gallipuén, Valcomuna…): el dato del SAIH
+  const soloSaih = num(obs.volumen_hm3) === null && reciente !== null;
   return {
     slug: d.slug,
-    nombre: d.nombre,
+    // «Parras (Las)» → «Las Parras»
+    nombre: String(d.nombre).replace(/^(.+) \((las|los|la|el)\)$/i, "$2 $1"),
     rio: d.rio_canonico ?? d.rio ?? null,
     provincia: d.provincia,
     cuenca: d.cuenca,
     lat: num(d.coordenadas?.lat),
     lon: num(d.coordenadas?.lng),
     capacidad: num(obs.capacidad_hm3) ?? num(d.capacidad_catalogo_hm3),
-    volumen: num(obs.volumen_hm3),
-    porcentaje: num(obs.fill_percentage),
+    volumen: soloSaih ? reciente!.volumen : num(obs.volumen_hm3),
+    porcentaje: soloSaih ? reciente!.porcentaje : num(obs.fill_percentage),
     variacion: num(obs.variacion_semanal_hm3),
     fecha: obs.fecha ?? null,
     reciente,
@@ -127,24 +131,46 @@ export async function embalsesElegidos(db: D1Database): Promise<string[]> {
   return (await db.prepare("SELECT slug FROM embalses ORDER BY orden, creado").all<{ slug: string }>()).results.map((r) => r.slug);
 }
 
+/** Lee un embalse de MapasDeEmbalses.es y guarda su estado. */
+async function guardarEmbalse(env: Env, ctx: Ctx, slug: string): Promise<Embalse | null> {
+  try {
+    const [ficha, hist] = await Promise.all([
+      pedir(`/embalses/${encodeURIComponent(slug)}`, 3600, ctx),
+      pedir(`/embalses/${encodeURIComponent(slug)}/historico`, 6 * 3600, ctx).catch(() => null),
+    ]);
+    const e = adaptarEmbalse(ficha.data, hist?.data ?? null);
+    await env.DB.prepare("UPDATE embalses SET datos = ?, actualizado = unixepoch() WHERE slug = ?").bind(JSON.stringify(e), slug).run();
+    return e;
+  } catch (err) {
+    console.error("embalse", slug, err);
+    // Se marca igualmente para que un embalse que falla no bloquee a los demás (se conserva el último dato)
+    await env.DB.prepare("UPDATE embalses SET actualizado = unixepoch() WHERE slug = ?").bind(slug).run();
+    return null;
+  }
+}
+
+/** Tarea: refresca los embalses que llevan más de una hora sin leerse (como mucho «cuantos» por pasada). */
+export async function refrescarEmbalses(env: Env, ctx: Ctx, cuantos = 1): Promise<void> {
+  const filas = (
+    await env.DB.prepare("SELECT slug FROM embalses WHERE actualizado IS NULL OR actualizado < unixepoch() - 3600 ORDER BY actualizado IS NOT NULL, actualizado LIMIT ?")
+      .bind(cuantos)
+      .all<{ slug: string }>()
+  ).results;
+  for (const f of filas) await guardarEmbalse(env, ctx, f.slug);
+}
+
 export async function estadoEmbalses(env: Env, ctx: Ctx): Promise<RespuestaEmbalses> {
-  const slugs = (await embalsesElegidos(env.DB)).slice(0, 20);
+  const filas = (await env.DB.prepare("SELECT slug, datos FROM embalses ORDER BY orden, creado").all<{ slug: string; datos: string | null }>()).results;
   const errores: string[] = [];
-  const lista = await Promise.all(
-    slugs.map(async (slug) => {
-      try {
-        const [ficha, hist] = await Promise.all([
-          pedir(`/embalses/${encodeURIComponent(slug)}`, 3600, ctx),
-          pedir(`/embalses/${encodeURIComponent(slug)}/historico`, 6 * 3600, ctx).catch(() => null),
-        ]);
-        return adaptarEmbalse(ficha.data, hist?.data ?? null);
-      } catch (e) {
-        console.error("embalse", slug, e);
-        errores.push(slug);
-        return null;
-      }
-    }),
-  );
+  let leidos = 0;
+  const lista: (Embalse | null)[] = [];
+  for (const f of filas) {
+    if (f.datos) lista.push(JSON.parse(f.datos));
+    // Recién añadido y aún sin leer: se lee ahora (pocos, para no pasar del límite de peticiones)
+    else if (leidos++ < 4) lista.push(await guardarEmbalse(env, ctx, f.slug));
+    else lista.push(null);
+    if (!lista.at(-1)) errores.push(f.slug);
+  }
   const embalses = lista.filter((e): e is Embalse => e !== null);
   const fechas = embalses.map((e) => e.fecha).filter((f): f is string => !!f).sort();
   return { fecha: fechas.at(-1) ?? null, porDefecto: await embalsesPorDefecto(env.DB), embalses, errores };

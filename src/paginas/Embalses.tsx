@@ -1,18 +1,27 @@
-// Embalses: arriba, grandes, los que sigue el usuario (sin cuenta, los de por defecto: Arquillo de San Blas);
-// el resto, agrupados por cuenca.
-// Datos del boletín semanal del MITECO y, si lo hay, el dato reciente del SAIH.
-import { lazy, Suspense } from "react";
+// Embalses: igual que la página de ríos. Arriba los que sigue el usuario (sin cuenta, los de por defecto: Arquillo
+// de San Blas); debajo, todos los embalses configurados con buscador, filtro por cuenca, mapa y lista desplegable.
+// Datos del boletín semanal del MITECO y, si lo hay, el dato reciente del SAIH (vía MapasDeEmbalses.es).
+import { lazy, Suspense, useMemo, useState } from "react";
 import type { Embalse, RespuestaEmbalses } from "../../shared/tipos";
-import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
 import BotonSeguir from "../componentes/BotonSeguir";
+import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
 import { usePeticion, useSesion } from "../datos";
-import { useSeguidos } from "../seguidos";
-
-type Seguidos = ReturnType<typeof useSeguidos>;
 import { colorEmbalse } from "../embalses";
 import { conSigno, fechaCompleta, hora, n, nombreMes } from "../formato";
+import { useSeguidos } from "../seguidos";
 
 const Mapa = lazy(() => import("../componentes/Mapa"));
+
+type Seguidos = ReturnType<typeof useSeguidos>;
+
+const quitarAcentos = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const mesAnio = (fecha: string) => nombreMes(fecha.slice(0, 7)).replace(" de ", " ");
+
+/** Diferencia con la media de esta semana en otros años, en puntos. */
+function frenteMedia(e: Embalse): number | null {
+  if (e.porcentaje == null || !e.media) return null;
+  return Math.round(e.porcentaje - e.media.porcentaje);
+}
 
 /** Diferencia en puntos de porcentaje respecto a otra referencia. */
 function Puntos({ actual, referencia, texto }: { actual: number | null; referencia: number | null; texto: string }) {
@@ -50,105 +59,140 @@ function Variacion({ v }: { v: number | null }) {
 /** Minigráfica del último año (porcentaje semanal). */
 function Serie({ serie, color }: { serie: Embalse["serie"]; color: string }) {
   const puntos = serie.filter((s): s is [string, number] => s[1] !== null);
-  if (puntos.length < 2) return null;
+  if (puntos.length < 2) return <div className="mini-rio" />;
   const ancho = 300;
-  const alto = 44;
+  const alto = 46;
   const x = (i: number) => (i / (puntos.length - 1)) * ancho;
   const y = (p: number) => alto - 2 - (Math.min(100, Math.max(0, p)) / 100) * (alto - 4);
   const linea = puntos.map(([, p], i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p).toFixed(1)}`).join(" ");
   return (
-    <svg className="serie-embalse" viewBox={`0 0 ${ancho} ${alto}`} preserveAspectRatio="none" role="img" aria-label="Evolución del último año">
+    <svg className="mini-rio" viewBox={`0 0 ${ancho} ${alto}`} preserveAspectRatio="none" role="img" aria-label="Evolución del último año">
       <path d={`${linea} L${ancho} ${alto} L0 ${alto} Z`} fill={color} opacity="0.12" />
       <path d={linea} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
 
-const mesAnio = (fecha: string) => nombreMes(fecha.slice(0, 7)).replace(" de ", " ");
+/** Texto del dato: semanal del boletín o, si no lo hay, el del SAIH. */
+function textoDato(e: Embalse): string {
+  if (e.fecha)
+    return `Boletín del ${fechaCompleta(e.fecha)}${e.reciente ? ` · ${e.reciente.fuente} a las ${hora(e.reciente.ts)}: ${n(e.reciente.porcentaje)} %` : ""}`;
+  if (e.reciente) return `Solo dato del ${e.reciente.fuente} (no sale en el boletín semanal), a las ${hora(e.reciente.ts)}`;
+  return "Sin datos ahora mismo";
+}
 
+/** Tarjeta de un embalse que sigue el usuario (como las de los ríos). */
 function TarjetaEmbalse({ e, seg }: { e: Embalse; seg: Seguidos }) {
   const color = colorEmbalse(e.porcentaje);
   return (
-    <a href={`/embalses/${e.slug}`} className="tarjeta tarjeta-embalse enlace">
+    <a href={`/embalses/${e.slug}`} className="tarjeta tarjeta-rio tarjeta-embalse enlace" style={{ borderTopColor: color }}>
       <div className="tarjeta-rio-cabecera">
-        <h3>{e.nombre}</h3>
+        <div>
+          <h3>{e.nombre}</h3>
+          <p className="suave pequeno">
+            {e.rio ? `Río ${e.rio} · ` : ""}
+            {e.cuenca}
+          </p>
+        </div>
         {seg.usuario && <BotonSeguir activo={seg.sigue(e.slug)} ocupado={seg.ocupado === e.slug} onClick={() => seg.alternar(e.slug)} nombre={e.nombre} />}
       </div>
-      <p className="suave pequeno">
-        {e.rio ? `Río ${e.rio} · ` : ""}
-        {e.provincia}
-      </p>
       <p className="numero-medio" style={{ color }}>
         {n(e.porcentaje, 0)}
         <sup>%</sup>
       </p>
       <div className="barra-embalse">
-        <i style={{ width: `${Math.min(100, e.porcentaje ?? 0)}%`, background: color }} />
+        <i
+          style={{
+            width: `${Math.min(100, e.porcentaje ?? 0)}%`,
+            background: color,
+          }}
+        />
       </div>
       <p>
-        <b>{n(e.volumen, 0)} hm³</b> <span className="suave">de {n(e.capacidad, 0)} hm³</span>
+        <b>{n(e.volumen, e.volumen != null && e.volumen < 10 ? 1 : 0)} hm³</b> <span className="suave">de {n(e.capacidad, 0)} hm³</span>
       </p>
       <Variacion v={e.variacion} />
       <Comparativa e={e} />
       <Serie serie={e.serie} color={color} />
-      {e.maximo && e.minimo && (
-        <p className="suave pequeno">
-          Máx. <b>{n(e.maximo.volumen, 0)} hm³</b> ({mesAnio(e.maximo.fecha)}) · Mín. <b>{n(e.minimo.volumen, 0)} hm³</b> (
-          {mesAnio(e.minimo.fecha)}){e.desde && ` · desde ${e.desde.slice(0, 4)}`}
-        </p>
-      )}
-      <Reciente e={e} />
-      <span className="ver-grafica">Ver gráfica y datos ›</span>
+      <p className="suave pequeno">
+        {textoDato(e)}
+        {e.maximo &&
+          e.minimo &&
+          ` · máx. ${n(e.maximo.volumen, 0)} hm³ (${mesAnio(e.maximo.fecha)}), mín. ${n(e.minimo.volumen, 0)} hm³ (${mesAnio(e.minimo.fecha)})`}
+      </p>
+      <span className="ver-grafica">Ver el embalse ›</span>
     </a>
   );
 }
 
-function Reciente({ e }: { e: Embalse }) {
-  if (!e.reciente) return null;
-  return (
-    <p className="reciente-embalse">
-      <span className="mono">{e.reciente.fuente}</span> · {hora(e.reciente.ts)}: <b>{n(e.reciente.volumen)} hm³</b>
-      {e.reciente.porcentaje !== null && ` (${n(e.reciente.porcentaje)} %)`}
-      {e.reciente.nivel !== null && ` · cota ${n(e.reciente.nivel, 2)} m`}
-    </p>
-  );
-}
-
-/** Embalse destacado: grande y arriba. */
-function Destacado({ e, seg }: { e: Embalse; seg: Seguidos }) {
+/** Fila compacta de la lista de todos los embalses. */
+function FilaEmbalse({ e, seg }: { e: Embalse; seg: Seguidos }) {
   const color = colorEmbalse(e.porcentaje);
+  const d = frenteMedia(e);
   return (
-    <a href={`/embalses/${e.slug}`} className="tarjeta embalse-destacado enlace">
-      <div className="destacado-estado">
-        <div className="tarjeta-rio-cabecera">
-          <small className="mono">{seg.sonPropios ? "LO SIGUES" : "DESTACADO"}</small>
-          {seg.usuario && <BotonSeguir activo={seg.sigue(e.slug)} ocupado={seg.ocupado === e.slug} onClick={() => seg.alternar(e.slug)} nombre={e.nombre} />}
-        </div>
-        <h2>{e.nombre}</h2>
-        <p className="suave pequeno">
+    <a href={`/embalses/${e.slug}`} className="fila-rio fila-embalse">
+      <i className="punto-rio" style={{ background: color }} aria-hidden="true" />
+      <span className="fila-rio-nombre">
+        <b>{e.nombre}</b>
+        <small className="suave">
           {e.rio ? `Río ${e.rio} · ` : ""}
-          {e.provincia}
-        </p>
-        <p className="numero-enorme" style={{ color }}>
-          {n(e.porcentaje, 0)}
-          <sup>%</sup>
-        </p>
-        <div className="barra-embalse grande">
-          <i style={{ width: `${Math.min(100, e.porcentaje ?? 0)}%`, background: color }} />
-        </div>
-        <p>
-          <b>{n(e.volumen, 0)} hm³</b> <span className="suave">de {n(e.capacidad, 0)} hm³</span>
-        </p>
-        <Variacion v={e.variacion} />
-      </div>
-      <div className="destacado-detalle">
-        <Comparativa e={e} />
-        <Serie serie={e.serie} color={color} />
-        <p className="suave pequeno">Último año, porcentaje semanal</p>
-        <Reciente e={e} />
-        <span className="ver-grafica">Ver gráfica y datos ›</span>
-      </div>
+          {n(e.volumen, e.volumen != null && e.volumen < 10 ? 1 : 0)} de {n(e.capacidad, 0)} hm³
+        </small>
+      </span>
+      <span className="fila-rio-valor">
+        <b>{n(e.porcentaje, 0)}</b> <small className="suave">%</small>
+      </span>
+      <span className="fila-rio-estado">
+        {d !== null ? (
+          <span
+            className={`variacion ${d > 0 ? "sube" : d < 0 ? "baja" : "estable"}`}
+            title={`Media de esta semana en ${e.media!.anios} años: ${n(e.media!.porcentaje, 0)} %`}
+          >
+            {d === 0 ? "como la media" : `${d > 0 ? "+" : "−"}${Math.abs(d)} vs media`}
+          </span>
+        ) : (
+          <small className="suave">{e.fecha ? "" : "solo SAIH"}</small>
+        )}
+        {e.variacion !== null && (
+          <span className={`variacion ${e.variacion > 0 ? "sube" : e.variacion < 0 ? "baja" : "estable"}`} title={`${conSigno(e.variacion)} hm³ en 7 días`}>
+            {e.variacion > 0 ? "▲" : e.variacion < 0 ? "▼" : "●"}
+          </span>
+        )}
+      </span>
+      {seg.usuario && <BotonSeguir activo={seg.sigue(e.slug)} ocupado={seg.ocupado === e.slug} onClick={() => seg.alternar(e.slug)} nombre={e.nombre} />}
     </a>
+  );
+}
+
+/** Un grupo de la lista (una cuenca) que se abre y se cierra. */
+function GrupoEmbalses({
+  titulo,
+  lista,
+  seg,
+  abierto,
+  onCambio,
+}: {
+  titulo: string;
+  lista: Embalse[];
+  seg: Seguidos;
+  abierto: boolean;
+  onCambio: (abierto: boolean) => void;
+}) {
+  const capacidad = lista.reduce((s, e) => s + (e.capacidad ?? 0), 0);
+  const volumen = lista.reduce((s, e) => s + (e.volumen ?? 0), 0);
+  return (
+    <details className="tarjeta lista-rios" open={abierto} onToggle={(ev) => onCambio((ev.currentTarget as HTMLDetailsElement).open)}>
+      <summary>
+        <span className="titulo-grupo">{titulo}</span>
+        <span className="suave pequeno">
+          {lista.length} {lista.length === 1 ? "embalse" : "embalses"}
+          {capacidad > 0 && ` · ${n((volumen / capacidad) * 100, 0)} % en conjunto`}
+        </span>
+      </summary>
+      {lista.map((e) => (
+        <FilaEmbalse key={e.slug} e={e} seg={seg} />
+      ))}
+    </details>
   );
 }
 
@@ -156,83 +200,142 @@ export default function Embalses() {
   const { datos, error } = usePeticion<RespuestaEmbalses>("/api/embalses", 30 * 60_000);
   const seg = useSeguidos("embalse", datos?.porDefecto ?? []);
   const admin = useSesion().usuario?.rol === "admin";
+  const [busca, setBusca] = useState("");
+  const [cuenca, setCuenca] = useState("");
+  // Grupos abiertos a mano; al buscar o filtrar por cuenca se abren todos los que tengan resultados
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  const embalses = datos?.embalses ?? [];
+  const cuencas = useMemo(() => [...new Set(embalses.map((e) => e.cuenca))].sort((a, b) => a.localeCompare(b, "es")), [embalses]);
+  const filtrados = useMemo(() => {
+    const q = quitarAcentos(busca.trim());
+    return embalses.filter((e) => (!cuenca || e.cuenca === cuenca) && (!q || quitarAcentos(`${e.nombre} ${e.rio ?? ""} ${e.provincia}`).includes(q)));
+  }, [embalses, busca, cuenca]);
   if (!datos) return <Cargando error={error} />;
-  const destacados = seg.destacados.map((slug) => datos.embalses.find((e) => e.slug === slug)).filter((e): e is Embalse => !!e);
-  const resto = datos.embalses.filter((e) => !destacados.includes(e));
-  const cuencas = [...new Set(resto.map((e) => e.cuenca))];
-  const rios = (c: string) => [...new Set(datos.embalses.filter((e) => e.cuenca === c && e.rio).map((e) => e.rio!))];
+
+  const destacados = seg.destacados.map((slug) => embalses.find((e) => e.slug === slug)).filter((e): e is Embalse => !!e);
+  const porCuenca = cuencas.map((c) => [c, filtrados.filter((e) => e.cuenca === c)] as const).filter(([, l]) => l.length);
+  const conMapa = filtrados.filter((e) => e.lat !== null && e.lon !== null);
 
   return (
     <>
       <section className="cabecera-embalses">
         <h1>Embalses</h1>
         <p className="suave">
-          Boletín semanal del MITECO{datos.fecha && ` del ${fechaCompleta(datos.fecha)}`}. Se actualiza una vez por semana.
+          Agua embalsada según el boletín semanal del MITECO
+          {datos.fecha && ` (el último, del ${fechaCompleta(datos.fecha)})`} y, cuando lo hay, el dato reciente del SAIH. Pulsa un embalse para ver su evolución
+          y su histórico.
         </p>
       </section>
 
-      {destacados.map((e) => (
-        <Destacado key={e.slug} e={e} seg={seg} />
-      ))}
-      <p className="suave pequeno nota-seguir">
-        {seg.usuario
-          ? seg.sonPropios
-            ? "Arriba están los embalses que sigues. Pulsa ☆ en cualquiera para añadirlo o quitarlo."
-            : "Pulsa ☆ en cualquier embalse para tenerlo arriba."
-          : "Entra en tu cuenta para elegir los embalses que ves arriba."}
-      </p>
+      {destacados.length > 0 && (
+        <>
+          <CabeceraSeccion
+            titulo={seg.sonPropios ? "Tus embalses" : "Destacado"}
+            nota={
+              seg.usuario
+                ? seg.sonPropios
+                  ? "Los que sigues (☆ para añadir o quitar)"
+                  : "Pulsa ☆ en cualquier embalse para tenerlo aquí"
+                : "Entra en tu cuenta para elegir los embalses que ves aquí"
+            }
+          />
+          <div className="rejilla-3 rejilla-rios">
+            {destacados.map((e) => (
+              <TarjetaEmbalse key={e.slug} e={e} seg={seg} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <CabeceraSeccion titulo="Todos los embalses" nota={`${embalses.length} ${embalses.length === 1 ? "embalse" : "embalses"}`} />
       {admin && (
         <p className="anadir-admin">
           <a className="boton-secundario" href="/admin#embalses">
             + Añadir embalse
           </a>
-          <small className="suave">Solo lo ves tú, como administrador.</small>
+          <small className="suave">Solo lo ves tú, como administrador: cualquier embalse de España.</small>
         </p>
       )}
-
-      {cuencas.map((c) => {
-        const r = rios(c);
-        return (
-          <div key={c}>
-            <CabeceraSeccion
-              titulo={`Cuenca del ${c}`}
-              nota={r.length ? `${r.length > 1 ? "Ríos" : "Río"} ${r.join(", ").replace(/, ([^,]*)$/, " y $1")}` : undefined}
-            />
-            <div className="rejilla-3">
-              {resto
-                .filter((e) => e.cuenca === c)
-                .map((e) => (
-                  <TarjetaEmbalse key={e.slug} e={e} seg={seg} />
-                ))}
-            </div>
-          </div>
-        );
-      })}
-
-      {datos.embalses.some((e) => e.lat !== null) && (
-        <>
-          <CabeceraSeccion titulo="Mapa de embalses" />
-          <Suspense fallback={<div className="mapa" />}>
-            <Mapa
-              puntos={datos.embalses
-                .filter((e) => e.lat !== null && e.lon !== null)
-                .map((e) => ({ lat: e.lat!, lon: e.lon!, nombre: e.nombre, valor: null, etiqueta: `${n(e.porcentaje, 0)} %`, href: `/embalses/${e.slug}`, color: colorEmbalse(e.porcentaje) }))}
-            />
-          </Suspense>
-        </>
+      {embalses.length > 4 && (
+        <div className="filtros-rios">
+          <input
+            type="search"
+            value={busca}
+            placeholder="Buscar un embalse, un río o un lugar…"
+            onChange={(e) => setBusca(e.target.value)}
+            aria-label="Buscar un embalse"
+          />
+          {cuencas.length > 1 && (
+            <select value={cuenca} onChange={(e) => setCuenca(e.target.value)} aria-label="Cuenca">
+              <option value="">Todas las cuencas</option>
+              {cuencas.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       )}
 
-      <p className="nota-fuente seccion">
-        Datos procesados por{" "}
+      {conMapa.length > 0 && (
+        <Suspense fallback={<div className="mapa" />}>
+          <Mapa
+            alto={420}
+            margen={0.08}
+            pequeno
+            soloFijos={conMapa.length > 8}
+            puntos={conMapa.map((e) => ({
+              lat: e.lat!,
+              lon: e.lon!,
+              nombre: e.nombre,
+              valor: null,
+              etiqueta: `${n(e.porcentaje, 0)} %`,
+              href: `/embalses/${e.slug}`,
+              color: colorEmbalse(e.porcentaje),
+              fijo: seg.destacados.includes(e.slug),
+            }))}
+          />
+        </Suspense>
+      )}
+      <p className="leyenda-rios suave pequeno">
+        <i style={{ background: "var(--e-muy-bajo)" }} /> Menos del 25 % <i style={{ background: "var(--e-bajo)" }} /> 25–50 %{" "}
+        <i style={{ background: "var(--e-medio)" }} /> 50–75 % <i style={{ background: "var(--e-alto)" }} /> Más del 75 %
+      </p>
+
+      {porCuenca.length ? (
+        porCuenca.map(([c, lista]) => (
+          <GrupoEmbalses
+            key={c}
+            titulo={`Cuenca del ${c}`}
+            lista={lista}
+            seg={seg}
+            abierto={!!busca.trim() || !!cuenca || abiertos.has(c)}
+            onCambio={(abierto) =>
+              setAbiertos((prev) => {
+                const nuevo = new Set(prev);
+                if (abierto) nuevo.add(c);
+                else nuevo.delete(c);
+                return nuevo;
+              })
+            }
+          />
+        ))
+      ) : (
+        <p className="vacio">{embalses.length ? "Ningún embalse coincide con la búsqueda." : "Todavía no hay embalses configurados."}</p>
+      )}
+
+      <p className="pie-fuente">
+        Datos:{" "}
         <a href="https://mapasdeembalses.es/" target="_blank" rel="noreferrer">
           MapasDeEmbalses.es
         </a>{" "}
-        · Fuente original:{" "}
+        · Fuente:{" "}
         <a href="https://www.miteco.gob.es/es/agua/temas/evaluacion-de-los-recursos-hidricos/boletin-hidrologico.html" target="_blank" rel="noreferrer">
-          MITECO (boletín hidrológico semanal)
+          boletín hidrológico semanal del MITECO
         </a>{" "}
-        y, en el dato reciente, el SAIH de cada confederación (datos provisionales, no contrastados).
-        {datos.errores.length > 0 && ` No se han podido leer: ${datos.errores.join(", ")}.`}
+        y SAIH de cada confederación (provisional)
+        {datos.errores.length > 0 && ` · No se han podido leer: ${datos.errores.join(", ")}`}
       </p>
     </>
   );

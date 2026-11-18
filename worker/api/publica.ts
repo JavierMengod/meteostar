@@ -189,7 +189,7 @@ app.get("/estaciones/:slug/completo", async (c) => {
 
 app.get("/embalses", async (c) => {
   try {
-    c.header("Cache-Control", "public, max-age=600");
+    c.header("Cache-Control", "public, max-age=300");
     return c.json(await estadoEmbalses(c.env, c.executionCtx));
   } catch (e) {
     console.error(e);

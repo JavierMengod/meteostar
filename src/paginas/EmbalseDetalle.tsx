@@ -63,6 +63,9 @@ export default function EmbalseDetalle({ slug }: { slug: string }) {
   const color = colorEmbalse(e.porcentaje);
   const serie = (semanas ? e.historico.slice(-semanas) : e.historico).map((s) => ({ ...s, t: Date.parse(`${s.fecha}T12:00:00Z`) }));
   const ultimas = [...e.historico].reverse().slice(0, 12);
+  // Embalses que no salen en el boletín semanal: solo el dato del SAIH, sin histórico
+  const conHistorico = e.historico.length > 1;
+  const decimales = e.volumen != null && e.volumen < 10 ? 1 : 0;
 
   return (
     <>
@@ -80,7 +83,7 @@ export default function EmbalseDetalle({ slug }: { slug: string }) {
 
       <div className="rejilla-embalse">
         <section className="tarjeta estado-embalse">
-          <small className="mono">VOLUMEN EMBALSADO · {e.fecha ? fechaCorta(e.fecha, true).toUpperCase() : "—"}</small>
+          <small className="mono">VOLUMEN EMBALSADO · {e.fecha ? fechaCorta(e.fecha, true).toUpperCase() : e.reciente ? `${e.reciente.fuente.toUpperCase()} · ${fechaCorta(new Date(e.reciente.ts * 1000).toISOString().slice(0, 10), true).toUpperCase()}` : "—"}</small>
           <p className="numero-enorme" style={{ color }}>
             {n(e.porcentaje)}
             <sup>%</sup>
@@ -89,14 +92,14 @@ export default function EmbalseDetalle({ slug }: { slug: string }) {
             <i style={{ width: `${Math.min(100, e.porcentaje ?? 0)}%`, background: color }} />
           </div>
           <p>
-            <b>{n(e.volumen, 0)} hm³</b> <span className="suave">de {n(e.capacidad, 0)} hm³ de capacidad</span>
+            <b>{n(e.volumen, decimales)} hm³</b> <span className="suave">de {n(e.capacidad, decimales)} hm³ de capacidad</span>
           </p>
           {e.variacion !== null && (
             <p className={e.variacion > 0 ? "variacion sube" : e.variacion < 0 ? "variacion baja" : "variacion"}>
               {e.variacion > 0 ? "▲" : e.variacion < 0 ? "▼" : "●"} {conSigno(e.variacion)} hm³ respecto a la semana anterior
             </p>
           )}
-          {e.reciente && (
+          {e.reciente && e.fecha && (
             <p className="reciente-embalse">
               <span className="mono">{e.reciente.fuente}</span> · {fechaCorta(new Date(e.reciente.ts * 1000).toISOString().slice(0, 10))} {hora(e.reciente.ts)}:{" "}
               <b>{n(e.reciente.volumen)} hm³</b>
@@ -134,6 +137,15 @@ export default function EmbalseDetalle({ slug }: { slug: string }) {
         </div>
       </div>
 
+      {!conHistorico && (
+        <p className="tarjeta aviso-sin-historico seccion">
+          Este embalse no sale en el boletín semanal del MITECO: solo hay el dato reciente del {e.reciente?.fuente ?? "SAIH"}
+          {e.reciente?.nivel != null && ` (cota ${n(e.reciente.nivel, 2)} m)`}, sin histórico con el
+          que compararlo ni gráfica de evolución.
+        </p>
+      )}
+      {conHistorico && (
+        <>
       <CabeceraSeccion titulo="Evolución" nota={e.desde ? `Datos semanales desde el ${fechaCompleta(e.desde)}` : undefined} />
       <div className="periodos" role="tablist">
         {RANGOS.map(([v, t]) => (
@@ -173,8 +185,11 @@ export default function EmbalseDetalle({ slug }: { slug: string }) {
           </ComposedChart>
         </ResponsiveContainer>
       </figure>
+        </>
+      )}
 
       <div className="rejilla-2 seccion">
+        {conHistorico && (
         <section className="tarjeta">
           <h3>Últimas semanas</h3>
           <table className="tabla-embalse">
@@ -201,6 +216,7 @@ export default function EmbalseDetalle({ slug }: { slug: string }) {
             Descargar todo el histórico (CSV)
           </button>
         </section>
+        )}
         <section className="tarjeta">
           <h3>Ficha</h3>
           <dl className="lista-datos">
