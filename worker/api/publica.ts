@@ -137,10 +137,20 @@ app.get("/estaciones/:slug/historico", async (c) => {
   return c.json(await historico(c.env.DB, c.get("estacion").id, ahora() - horas * 3600));
 });
 
+/** Resumen de cada día: los últimos «dias» (hasta 20 años) o todos con dias=todo. */
 app.get("/estaciones/:slug/resumen", async (c) => {
-  const dias = Math.min(Math.max(Number(c.req.query("dias")) || 30, 1), 366);
+  const q = c.req.query("dias");
+  const dias = q === "todo" ? 7305 : Math.min(Math.max(Number(q) || 30, 1), 7305);
   c.header("Cache-Control", "public, max-age=300");
   return c.json(await resumenes(c.env.DB, c.get("estacion").id, fechaLocal(ahora() - (dias - 1) * 86400)));
+});
+
+/** Extremos, medias y totales de un año (para elegir el año en «Extremos y récords»). */
+app.get("/estaciones/:slug/extremos", async (c) => {
+  const anio = Number(c.req.query("anio"));
+  if (!Number.isInteger(anio) || anio < 1900 || anio > 2200) return c.json({ error: "año no válido" }, 400);
+  c.header("Cache-Control", "public, max-age=300");
+  return c.json(await extremos(c.env.DB, c.get("estacion").id, `${anio}-01-01`, `${anio}-12-31`));
 });
 
 app.get("/estaciones/:slug/dia", async (c) => {

@@ -45,6 +45,11 @@ export interface ResumenDiario {
   uv_max: number | null;
   /** Rayos detectados en el día (si hay sensor) */
   rayos?: number | null;
+  /** Para las medias del día: media = suma / n */
+  temp_suma?: number | null;
+  temp_n?: number | null;
+  viento_suma?: number | null;
+  viento_n?: number | null;
   lecturas: number;
 }
 
@@ -125,6 +130,9 @@ export interface PuntoHistorico {
   intensidad: number | null;
   radiacion: number | null;
   uv: number | null;
+  /** Rayos del día hasta ese momento (contador) y distancia del último, si hay sensor */
+  rayos?: number | null;
+  rayos_dist?: number | null;
 }
 
 /** Un extremo: valor, día y (si se conoce) hora */

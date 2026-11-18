@@ -57,24 +57,46 @@ const SQL_RESUMEN = (() => {
       sets.push(`${col}_ts = CASE WHEN ${mejora} THEN excluded.${col}_ts ELSE ${col}_ts END`);
     }
   }
+  // Sumas para las medias del día (temperatura y viento): se van acumulando
+  for (const col of ["temp_suma", "temp_n", "viento_suma", "viento_n"]) {
+    cols.push(col);
+    sets.push(`${col} = coalesce(${col}, 0) + coalesce(excluded.${col}, 0)`);
+  }
   return `INSERT INTO resumen_diario (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})
     ON CONFLICT(estacion_id, fecha) DO UPDATE SET ${sets.join(", ")}`;
 })();
 
-function valoresResumen(estacionId: number, fecha: string, lecturas: number, valor: (campo: keyof Lectura, col: keyof ResumenDiario) => number | null, ts: number | null) {
+/** [suma de temperaturas, nº de temperaturas, suma de viento, nº de vientos] */
+type Sumas = [number | null, number, number | null, number];
+const sumasDe = (lecturas: Lectura[]): Sumas => {
+  const t = lecturas.map((l) => l.temp).filter((v): v is number => v !== null && v !== undefined);
+  const v = lecturas.map((l) => l.viento).filter((x): x is number => x !== null && x !== undefined);
+  return [t.length ? t.reduce((a, b) => a + b, 0) : null, t.length, v.length ? v.reduce((a, b) => a + b, 0) : null, v.length];
+};
+const SIN_SUMAS: Sumas = [null, 0, null, 0];
+
+function valoresResumen(
+  estacionId: number,
+  fecha: string,
+  lecturas: number,
+  valor: (campo: keyof Lectura, col: keyof ResumenDiario) => number | null,
+  ts: number | null,
+  sumas: Sumas,
+) {
   const valores: unknown[] = [estacionId, fecha, lecturas];
   for (const [col, campo, , conHora] of CAMPOS_RESUMEN) {
     const v = valor(campo, col);
-    valores.push(v);
-    if (conHora) valores.push(v === null ? null : ts);
+    valores.push(v ?? null);
+    if (conHora) valores.push(v === null || v === undefined ? null : ts);
   }
+  valores.push(...sumas);
   return valores;
 }
 
 async function actualizarResumen(db: D1Database, estacionId: number, l: Lectura) {
   await db
     .prepare(SQL_RESUMEN)
-    .bind(...valoresResumen(estacionId, fechaLocal(l.ts), 1, (campo) => l[campo] as number | null, l.ts))
+    .bind(...valoresResumen(estacionId, fechaLocal(l.ts), 1, (campo) => l[campo] as number | null, l.ts, sumasDe([l])))
     .run();
 }
 
@@ -99,7 +121,19 @@ export async function fusionarResumenDia(db: D1Database, estacionId: number, fec
     valores.push(m?.v ?? null);
     if (conHora) valores.push(m?.ts ?? null);
   }
-  await db.prepare(SQL_RESUMEN).bind(...valores).run();
+  // Las sumas de las medias no se acumulan aquí (repetir una importación las duplicaría): se ponen las del día
+  // importado si tiene al menos tantas lecturas como las que ya había
+  valores.push(...SIN_SUMAS);
+  const [ts, tn, vs, vn] = sumasDe(lecturas);
+  await db.batch([
+    db.prepare(SQL_RESUMEN).bind(...valores),
+    db
+      .prepare(
+        `UPDATE resumen_diario SET temp_suma = ?, temp_n = ?, viento_suma = ?, viento_n = ?
+         WHERE estacion_id = ? AND fecha = ? AND coalesce(temp_n, 0) <= ?`,
+      )
+      .bind(ts, tn, vs, vn, estacionId, fecha, tn),
+  ]);
 }
 
 /**
@@ -124,7 +158,7 @@ export async function guardarLecturasLote(db: D1Database, estacionId: number, le
 export async function guardarExtremosDia(db: D1Database, estacionId: number, fecha: string, ex: ExtremosDia) {
   await db
     .prepare(SQL_RESUMEN)
-    .bind(...valoresResumen(estacionId, fecha, 0, (_c, col) => (ex as Record<string, number | null>)[col] ?? null, null))
+    .bind(...valoresResumen(estacionId, fecha, 0, (_c, col) => (ex as Record<string, number | null>)[col] ?? null, null, SIN_SUMAS))
     .run();
 }
 
@@ -153,7 +187,7 @@ export async function historico(db: D1Database, estacionId: number, desde: numbe
         round(avg(presion), 1) AS presion, round(avg(viento), 1) AS viento, max(racha) AS racha,
         max(CASE WHEN ts % 300 = 0 THEN dir END) AS dir,
         max(lluvia_dia) AS lluvia_dia, max(intensidad) AS intensidad,
-        round(avg(radiacion)) AS radiacion, max(uv) AS uv
+        round(avg(radiacion)) AS radiacion, max(uv) AS uv, max(rayos) AS rayos, max(rayos_dist) AS rayos_dist
       FROM lecturas WHERE estacion_id = ? AND ts >= ? GROUP BY t ORDER BY t`,
     )
     .bind(estacionId, desde)

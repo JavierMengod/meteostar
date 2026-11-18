@@ -26,6 +26,9 @@
   --c-presion: #b07612;
   --c-sol: #d99a25;
   --c-uv: #8b49c9;
+  --c-rayos: #d4a017;
+  /* Noche sombreada en las gráficas */
+  --noche-grafica: rgba(40, 50, 90, 0.07);
   --v1: #d9e1f2;
   --v2: #9fb4e2;
   --v3: #4f74c9;
@@ -43,6 +46,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     --fondo: #0c0e1c;
+    --noche-grafica: rgba(150, 170, 255, 0.07);
     --superficie: #141730;
     --superficie-2: #1b1f3d;
     --borde: #2a2f55;
@@ -72,6 +76,7 @@
 }
 :root[data-modo="oscuro"] {
   --fondo: #0c0e1c;
+  --noche-grafica: rgba(150, 170, 255, 0.07);
   --superficie: #141730;
   --superficie-2: #1b1f3d;
   --borde: #2a2f55;
@@ -4094,4 +4099,71 @@ h3 {
   background: #0e9f6e;
   opacity: 0.55;
   transform: scale(0.8);
+}
+
+/* Estación: franja con el resumen del periodo de las gráficas */
+.franja-periodo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+.franja-periodo div {
+  display: grid;
+  gap: 1px;
+}
+.franja-periodo small {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--texto-suave);
+}
+.franja-periodo b {
+  font-family: var(--f-titulo);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.franja-periodo span {
+  font-size: 0.72rem;
+  color: var(--texto-suave);
+}
+
+/* Estación: tabla mes a mes */
+.tabla-meses {
+  overflow-x: auto;
+  padding: 0;
+}
+.tabla-meses table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+.tabla-meses th,
+.tabla-meses td {
+  padding: 8px 12px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--borde);
+}
+.tabla-meses thead th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--texto-suave);
+  font-weight: 600;
+}
+.tabla-meses tbody th,
+.tabla-meses thead th:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+.tabla-meses tbody tr:last-child th,
+.tabla-meses tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Estación: extremos de un año a elegir */
+.extremos-anio .periodos {
+  margin-bottom: 10px;
 }

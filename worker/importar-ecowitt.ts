@@ -65,7 +65,10 @@ export function lecturasHistorico(data: any, fecha: string): Lectura[] {
     uv: serie("solar_and_uvi", "uvi"),
     temp_int: serie("indoor", "temperature"),
     hum_int: serie("indoor", "humidity"),
+    rayos: serie("lightning", "count"),
+    rayos_dist: serie("lightning", "distance"),
   };
+  const millas = data?.lightning?.distance?.unit === "mi";
   const instantes = Object.keys(s.temp)
     .map(Number)
     .filter((t) => Number.isFinite(t) && fechaLocal(t) === fecha)
@@ -90,6 +93,8 @@ export function lecturasHistorico(data: any, fecha: string): Lectura[] {
       uv: redondear(g("uv")),
       temp_int: redondear(g("temp_int")),
       hum_int: redondear(g("hum_int"), 0),
+      rayos: g("rayos"),
+      rayos_dist: g("rayos_dist") === null ? null : redondear(millas ? g("rayos_dist")! * 1.609344 : g("rayos_dist")),
     };
   });
 }
@@ -105,7 +110,7 @@ async function importarDia(env: Env, f: FilaEstacion, c: { application_key: stri
     cycle_type: diasAtras < 85 ? "5min" : "30min",
     start_date: `${sumarDias(fecha, -1)} 20:00:00`,
     end_date: `${sumarDias(fecha, 1)} 04:00:00`,
-    call_back: "outdoor,indoor,wind,pressure,rainfall,solar_and_uvi",
+    call_back: "outdoor,indoor,wind,pressure,rainfall,solar_and_uvi,lightning",
     ...UNIDADES_API,
   });
   const lecturas = lecturasHistorico(data, fecha);
