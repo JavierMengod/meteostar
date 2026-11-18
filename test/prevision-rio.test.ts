@@ -162,6 +162,7 @@ describe("estado de los datos de un aforo", () => {
     const tornos = { rio: "Barranco de Tornos", nombre: "Barranco de Tornos", umbrales: [], normalHoy: null };
     const s = situacionAforo({ ...tornos, ultimo: { t: ahora - 18 * 3600, caudal: null, nivel: -0.05 } }, ahora);
     expect(s).toMatchObject({ estado: "ok", barrancoSeco: true, pastilla: "Seco" });
-    expect(situacionAforo({ ...tornos, ultimo: { t: ahora, caudal: null, nivel: 0.4 } }, ahora).pastilla).toBe("Lleva agua");
+    // Con nivel no se puede asegurar que lleve agua (puede ser el cero de la escala): sin etiqueta
+    expect(situacionAforo({ ...tornos, ultimo: { t: ahora, caudal: null, nivel: 0.4 } }, ahora).pastilla).toBeNull();
   });
 });

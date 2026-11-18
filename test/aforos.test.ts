@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adaptarSerie, juntar, reducir, tendencia, ultimaLectura } from "../worker/aforos";
+import { adaptarSerie, juntar, lecturasNuevas, reducir, tendencia, ultimaLectura, unirMini } from "../worker/aforos";
 
 const respuesta = {
   dates: ["2026-11-16T12:10:00+00:00", "2026-11-16T12:20:00+00:00", "2026-11-16T12:30:00+00:00", "malo"],
@@ -62,5 +62,18 @@ describe("aforos", () => {
     const viejos = r.filter((p) => p[0] < ahora - 48 * 3600);
     expect(viejos.length).toBe(52);
     expect(r.filter((p) => p[0] >= ahora - 48 * 3600).length).toBe(48 * 6 + 1);
+  });
+
+  it("guarda solo las lecturas nuevas y la última media hora", () => {
+    const filas: [number, number | null, number | null][] = [[1000, 1, 0.4], [3000, 1, 0.4], [4000, null, 0.4], [5000, 1, 0.4]];
+    expect(lecturasNuevas(filas, null)).toHaveLength(4);
+    expect(lecturasNuevas(filas, 4000).map((f) => f[0])).toEqual([3000, 4000, 5000]);
+  });
+
+  it("junta la minigráfica guardada con las lecturas nuevas, una por hora y solo 48 h", () => {
+    const ahora = 100 * 3600;
+    const previa: [number, number][] = [[40 * 3600, 9], [60 * 3600, 1], [99 * 3600, 2]];
+    const nuevas: [number, number | null, number | null][] = [[99 * 3600 + 600, 3, null], [100 * 3600, 4, null]];
+    expect(unirMini(previa, nuevas, ahora)).toEqual([[60 * 3600, 1], [99 * 3600, 2], [100 * 3600, 4]]);
   });
 });

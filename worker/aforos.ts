@@ -38,10 +38,11 @@ const DEMARCACIONES: Record<string, string> = {
 /** Días que se muestran en la página de cada aforo */
 const DIAS = 30;
 /**
- * Aforos que se leen en cada pasada (cada 10 minutos). Cada uno son 2 peticiones al Observatorio: así no se pasa
- * del límite de peticiones de un Worker ni se satura el servicio. Con más aforos, se van turnando.
+ * Aforos que se leen en cada pasada (cada 2 minutos). Cada uno son 2 peticiones al Observatorio y unas pocas consultas
+ * a D1: así no se pasa de los límites de una ejecución del Worker (plan gratuito) ni se satura el servicio.
+ * Con 10 por pasada, hasta unos 70 aforos se actualizan cada 10 minutos.
  */
-const LOTE = 20;
+const LOTE = 10;
 
 type Ctx = { waitUntil(p: Promise<unknown>): void };
 export type Lectura = [number, number | null, number | null];
@@ -144,32 +145,48 @@ async function guardarLecturas(db: D1Database, slug: string, filas: Lectura[]) {
 }
 
 /** Lee las últimas horas de un aforo (7 días si aún no hay nada) y las guarda, con sus umbrales. */
-async function leerAforo(db: D1Database, a: FilaAforo): Promise<Lectura[]> {
-  const hay = await db.prepare("SELECT 1 FROM aforo_lecturas WHERE estacion = ? LIMIT 1").bind(a.slug).first();
-  const horas = hay ? 6 : 7 * 24;
-  const [caudal, nivel] = await Promise.all([pedirSerie(a.elemento, PRODUCTO.caudal, horas), pedirSerie(a.elemento, PRODUCTO.nivel, horas)]);
-  if (caudal.umbrales.length && JSON.stringify(caudal.umbrales) !== a.umbrales) {
-    await db.prepare("UPDATE aforos SET umbrales = ? WHERE slug = ?").bind(JSON.stringify(caudal.umbrales), a.slug).run();
-  }
-  const filas = juntar(caudal.puntos, nivel.puntos);
-  await guardarLecturas(db, a.slug, filas);
-  await guardarUltimo(db, a.slug);
-  return filas;
+/** Lecturas que hay que guardar: las nuevas y las de la última media hora (el caudal llega unos minutos después que el nivel). */
+export function lecturasNuevas(filas: Lectura[], ultimaGuardada: number | null): Lectura[] {
+  return ultimaGuardada === null ? filas : filas.filter((f) => f[0] > ultimaGuardada - 1800);
 }
 
-/** Copia en la fila del aforo su última lectura, la tendencia y la minigráfica (para la portada de Ríos). */
-export async function guardarUltimo(db: D1Database, slug: string): Promise<void> {
-  const serie = (
-    await db
-      .prepare("SELECT t, caudal, nivel FROM aforo_lecturas WHERE estacion = ? AND t >= unixepoch() - 49 * 3600 ORDER BY t")
-      .bind(slug)
-      .all<{ t: number; caudal: number | null; nivel: number | null }>()
-  ).results.map((r) => [r.t, r.caudal, r.nivel] as Lectura);
-  const u = ultimaLectura(serie);
+/** Junta la minigráfica guardada con las lecturas nuevas: una por hora, solo las últimas 48 h. */
+export function unirMini(previa: [number, number][], filas: Lectura[], ahora = Date.now() / 1000): [number, number][] {
+  const porHora = new Map<number, [number, number]>();
+  for (const p of previa) porHora.set(Math.floor(p[0] / 3600), p);
+  for (const p of miniSerie(filas, ahora)) if (!porHora.has(Math.floor(p[0] / 3600))) porHora.set(Math.floor(p[0] / 3600), p);
+  return [...porHora.values()].filter((p) => p[0] >= ahora - 48 * 3600).sort((x, y) => x[0] - y[0]);
+}
+
+/**
+ * Lee las lecturas recientes de un aforo y guarda solo las nuevas (para no gastar escrituras de D1), junto con
+ * la última lectura, la tendencia y la minigráfica en la fila del aforo. Si aún no tiene nada, carga los 7 días
+ * que permite el Observatorio.
+ */
+async function leerAforo(db: D1Database, a: FilaAforo): Promise<Lectura[]> {
+  const ultimaGuardada = (await db.prepare("SELECT MAX(t) AS t FROM aforo_lecturas WHERE estacion = ?").bind(a.slug).first<{ t: number | null }>())?.t ?? null;
+  const ahora = Date.now() / 1000;
+  // Al menos 4 horas, para poder calcular la tendencia de las últimas 3
+  const horas = ultimaGuardada === null ? 7 * 24 : Math.min(7 * 24, Math.max(4, Math.ceil((ahora - ultimaGuardada) / 3600) + 1));
+  const [caudal, nivel] = await Promise.all([pedirSerie(a.elemento, PRODUCTO.caudal, horas), pedirSerie(a.elemento, PRODUCTO.nivel, horas)]);
+  const umbrales = caudal.umbrales.length && JSON.stringify(caudal.umbrales) !== a.umbrales ? JSON.stringify(caudal.umbrales) : a.umbrales;
+  const filas = juntar(caudal.puntos, nivel.puntos);
+  await guardarLecturas(db, a.slug, lecturasNuevas(filas, ultimaGuardada));
+  const u = ultimaLectura(filas);
+  const previa: [number, number][] = a.mini ? JSON.parse(a.mini) : [];
   await db
-    .prepare("UPDATE aforos SET ultimo_t = ?, ultimo_caudal = ?, ultimo_nivel = ?, tendencia = ?, mini = ?, leido = unixepoch() WHERE slug = ?")
-    .bind(u?.t ?? null, u?.caudal ?? null, u?.nivel ?? null, tendencia(serie), JSON.stringify(miniSerie(serie)), slug)
+    .prepare("UPDATE aforos SET ultimo_t = ?, ultimo_caudal = ?, ultimo_nivel = ?, tendencia = ?, mini = ?, umbrales = ?, leido = unixepoch() WHERE slug = ?")
+    .bind(
+      u?.t ?? a.ultimo_t,
+      u ? u.caudal : a.ultimo_caudal,
+      u ? u.nivel : a.ultimo_nivel,
+      filas.length ? tendencia(filas) : a.tendencia,
+      JSON.stringify(unirMini(previa, filas, ahora)),
+      umbrales,
+      a.slug,
+    )
     .run();
+  return filas;
 }
 
 /** Tarea cada 10 minutos: lecturas nuevas de los aforos que llevan más tiempo sin leerse (como mucho LOTE). */

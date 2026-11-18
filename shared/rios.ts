@@ -74,7 +74,7 @@ export function situacionAforo(a: Pick<Aforo, "ultimo" | "umbrales" | "normalHoy
     siguienteAviso: valido && siguiente !== undefined ? `${NOMBRES_AVISO[aviso + 1] ?? "Aviso"} a partir de ${n(siguiente, 0)} m³/s` : null,
     normal,
     /** Texto corto del estado para las tarjetas y la lista */
-    pastilla: estado === "sin-datos" ? "Sin datos" : barranco && sinAgua ? "Seco" : sinAgua ? "Sin agua" : barranco ? "Lleva agua" : (normal?.corto ?? null),
+    pastilla: estado === "sin-datos" ? "Sin datos" : barranco && sinAgua ? "Seco" : sinAgua ? "Sin agua" : barranco ? null : (normal?.corto ?? null),
     /** Color para el mapa y las tarjetas: aviso, sin datos, sin agua o cómo va frente a lo normal */
     color:
       aviso >= 0

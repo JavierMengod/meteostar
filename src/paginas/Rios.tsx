@@ -200,7 +200,8 @@ export default function Rios() {
       {filtrados.length > 0 && (
         <Suspense fallback={<div className="mapa" />}>
           <Mapa
-            alto={400}
+            alto={420}
+            margen={0.05}
             agrupar={filtrados.length > 8}
             puntos={filtrados.map((a) => {
               const v = valor(a);

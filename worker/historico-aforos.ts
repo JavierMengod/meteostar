@@ -3,7 +3,7 @@
 // se calcula una vez al día y se guarda en D1, para que cada visita lea una sola fila.
 import { anioHidrologico, diaHidrologico } from "../shared/hidrologia";
 import type { AnioAforo, CrecidaAforo, DiaAforo, ResumenAforo, RespuestaRio } from "../shared/tipos";
-import { type FilaAforo, aforoPorSlug, aforosConfigurados, normalDeHoy } from "./aforos";
+import { type FilaAforo, aforoPorSlug, normalDeHoy } from "./aforos";
 import { fechaLocal } from "./fechas";
 import { calcularCorreccion, celdaDelAforo, climaModeloCompacto, componerPrevision, historicoModelo, pedirReciente } from "./prevision-rio";
 
@@ -153,10 +153,26 @@ export async function calcularResumen(db: D1Database, a: FilaAforo): Promise<Res
   return resumen;
 }
 
-/** Tarea diaria: medias de ayer y resumen nuevo de cada aforo. */
+/** Tarea diaria: medias diarias de las lecturas de ayer (los resúmenes se rehacen poco a poco, ver refrescarResumenes). */
 export async function actualizarHistorico(env: Env): Promise<void> {
   await consolidarLecturas(env.DB);
-  for (const a of await aforosConfigurados(env.DB)) {
+}
+
+/**
+ * Rehace los resúmenes que tienen más de un día, como mucho «cuantos» por llamada: así el trabajo se reparte entre
+ * las pasadas de la tarea de los aforos y ninguna pasa de los límites de una ejecución del Worker.
+ */
+export async function refrescarResumenes(env: Env, cuantos: number): Promise<void> {
+  const pendientes = (
+    await env.DB.prepare(
+      `SELECT a.* FROM aforos a LEFT JOIN aforo_resumen r ON r.estacion = a.slug
+       WHERE r.actualizado IS NULL OR r.actualizado < unixepoch() - 23 * 3600
+       ORDER BY r.actualizado IS NOT NULL, r.actualizado LIMIT ?`,
+    )
+      .bind(cuantos)
+      .all<FilaAforo>()
+  ).results;
+  for (const a of pendientes) {
     try {
       await calcularResumen(env.DB, a);
     } catch (e) {
