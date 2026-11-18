@@ -46,6 +46,32 @@ export async function primerDiaEcowitt(env: Env, f: FilaEstacion): Promise<strin
   return sumarDias(fechaLocal(creada), -1);
 }
 
+/**
+ * Contadores del día (lluvia, rayos) puestos a cero a medianoche de Madrid. ecowitt.net los pone a cero a medianoche
+ * de la zona horaria de la estación (p. ej. Londres: la 1:00 de Madrid), así que en la primera hora del día seguiría
+ * contando la lluvia del anterior. Se suman las subidas de lectura a lectura (si baja, es que se puso a cero).
+ */
+export function contadorDesdeMedianoche(serie: Record<string, string>, instantes: number[]): Map<number, number> {
+  const fuera = new Map<number, number>();
+  let antes: number | null = null;
+  let dia = "";
+  let total = 0;
+  for (const t of instantes) {
+    const v = num(serie[String(t)]);
+    if (v === null) continue;
+    const subida = antes === null ? 0 : v >= antes ? v - antes : v;
+    antes = v;
+    const f = fechaLocal(t);
+    if (f !== dia) {
+      dia = f;
+      total = 0;
+    }
+    total += subida;
+    fuera.set(t, Math.round(total * 10) / 10);
+  }
+  return fuera;
+}
+
 /** Lecturas de un día (hora de Madrid) a partir de la respuesta de «history». */
 export function lecturasHistorico(data: any, fecha: string): Lectura[] {
   const serie = (grupo: string, campo: string): Record<string, string> => data?.[grupo]?.[campo]?.list ?? {};
@@ -69,10 +95,14 @@ export function lecturasHistorico(data: any, fecha: string): Lectura[] {
     rayos_dist: serie("lightning", "distance"),
   };
   const millas = data?.lightning?.distance?.unit === "mi";
-  const instantes = Object.keys(s.temp)
+  // Todos los instantes pedidos (también los de la víspera, para saber cuánto llevaban los contadores a medianoche)
+  const todos = Object.keys(s.temp)
     .map(Number)
-    .filter((t) => Number.isFinite(t) && fechaLocal(t) === fecha)
+    .filter((t) => Number.isFinite(t))
     .sort((a, b) => a - b);
+  const lluvia = contadorDesdeMedianoche(s.lluvia_dia, todos);
+  const rayos = contadorDesdeMedianoche(s.rayos, todos);
+  const instantes = todos.filter((t) => fechaLocal(t) === fecha);
   return instantes.map((t) => {
     const g = (k: keyof typeof s) => num(s[k][String(t)]);
     return {
@@ -87,13 +117,13 @@ export function lecturasHistorico(data: any, fecha: string): Lectura[] {
       viento: redondear(g("viento")),
       racha: redondear(g("racha")),
       dir: g("dir"),
-      lluvia_dia: redondear(g("lluvia_dia")),
+      lluvia_dia: lluvia.get(t) ?? null,
       intensidad: redondear(g("intensidad")),
       radiacion: redondear(g("radiacion"), 0),
       uv: redondear(g("uv")),
       temp_int: redondear(g("temp_int")),
       hum_int: redondear(g("hum_int"), 0),
-      rayos: g("rayos"),
+      rayos: rayos.has(t) ? Math.round(rayos.get(t)!) : null,
       rayos_dist: g("rayos_dist") === null ? null : redondear(millas ? g("rayos_dist")! * 1.609344 : g("rayos_dist")),
     };
   });

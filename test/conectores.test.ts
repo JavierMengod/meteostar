@@ -4,7 +4,7 @@ import { leerMeteoclimatic, leerObservacionesAemet, leerWunderground } from "../
 import { leerEnvioConsola } from "../worker/ecowitt";
 import { slugDe } from "../worker/estaciones";
 import { leerRssEstacion } from "../worker/meteoclimatic";
-import { lecturasHistorico } from "../worker/importar-ecowitt";
+import { contadorDesdeMedianoche, lecturasHistorico } from "../worker/importar-ecowitt";
 
 describe("Meteoclimatic", () => {
   const xml = `<?xml version="1.0" encoding="ISO-8859-15"?><meteodata><stations><station>
@@ -145,6 +145,19 @@ describe("Meteoclimatic: RSS de una estación", () => {
 });
 
 describe("Histórico de ecowitt.net", () => {
+  it("cuenta la lluvia desde medianoche de Madrid aunque ecowitt.net la ponga a cero a la 1:00", () => {
+    // 17 nov: 23:00 y 23:30 de Madrid (llovía), 00:30 del 18 (el contador de Londres aún no se ha puesto a cero),
+    // 01:30 (ya a cero) y 02:00 (llueve un poco)
+    const t = (h: number, m: number) => Date.UTC(2026, 10, 17, h, m) / 1000; // UTC = Madrid - 1 h
+    const instantes = [t(22, 0), t(22, 30), t(23, 30), t(24, 30), t(25, 0)];
+    const serie = Object.fromEntries(instantes.map((x, i) => [String(x), ["5.0", "6.2", "6.4", "0.0", "0.8"][i]]));
+    const c = contadorDesdeMedianoche(serie, instantes);
+    expect(c.get(t(22, 30))).toBe(1.2); // día 17: lo que subió desde la primera lectura
+    expect(c.get(t(23, 30))).toBe(0.2); // día 18 a las 00:30: solo lo de después de medianoche
+    expect(c.get(t(24, 30))).toBe(0.2); // a la 1:30 ecowitt.net lo puso a cero: no se resta nada
+    expect(c.get(t(25, 0))).toBe(1); // y sigue sumando
+  });
+
   it("convierte la respuesta de «history» en lecturas del día de Madrid", () => {
     // 22:55 UTC del 17 = 23:55 del 17 en Madrid; 23:05 UTC = 00:05 del 18
     const t1 = String(Date.UTC(2026, 10, 17, 22, 55) / 1000);
@@ -156,7 +169,8 @@ describe("Histórico de ecowitt.net", () => {
     };
     const l17 = lecturasHistorico(data, "2026-11-17");
     expect(l17).toHaveLength(1);
-    expect(l17[0]).toMatchObject({ ts: Number(t1), temp: 10, hum: 80, racha: 12.6, lluvia_dia: 1.2, fuente: "ecowitt_historico" });
+    // La lluvia se cuenta desde la primera lectura recibida (aquí no hay ninguna antes)
+    expect(l17[0]).toMatchObject({ ts: Number(t1), temp: 10, hum: 80, racha: 12.6, lluvia_dia: 0, fuente: "ecowitt_historico" });
     const l18 = lecturasHistorico(data, "2026-11-18");
     expect(l18).toHaveLength(1);
     expect(l18[0]).toMatchObject({ temp: 9.8, racha: null });

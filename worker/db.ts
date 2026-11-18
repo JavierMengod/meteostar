@@ -125,14 +125,20 @@ export async function fusionarResumenDia(db: D1Database, estacionId: number, fec
   // importado si tiene al menos tantas lecturas como las que ya había
   valores.push(...SIN_SUMAS);
   const [ts, tn, vs, vn] = sumasDe(lecturas);
+  // Lluvia y rayos del día: el valor más alto de su contador (ya puesto a cero a medianoche), sin mezclar con lo que
+  // hubiera (una importación anterior podía tenerlo inflado)
+  const maximo = (k: "lluvia_dia" | "rayos") => {
+    const v = lecturas.map((l) => l[k]).filter((x): x is number => typeof x === "number");
+    return v.length ? Math.max(...v) : null;
+  };
   await db.batch([
     db.prepare(SQL_RESUMEN).bind(...valores),
     db
       .prepare(
-        `UPDATE resumen_diario SET temp_suma = ?, temp_n = ?, viento_suma = ?, viento_n = ?
+        `UPDATE resumen_diario SET temp_suma = ?, temp_n = ?, viento_suma = ?, viento_n = ?, lluvia = ?, rayos = ?
          WHERE estacion_id = ? AND fecha = ? AND coalesce(temp_n, 0) <= ?`,
       )
-      .bind(ts, tn, vs, vn, estacionId, fecha, tn),
+      .bind(ts, tn, vs, vn, maximo("lluvia_dia"), maximo("rayos"), estacionId, fecha, tn),
   ]);
 }
 
