@@ -24,6 +24,7 @@ import {
   crearEstacion,
   estacionesDe,
   estacionPorId,
+  estacionPorSlug,
   propia,
   validarEstacion,
   type DatosEstacion,
@@ -395,7 +396,15 @@ app.get("/admin/externas/catalogo", async (c) => {
 app.post("/admin/externas", async (c) => {
   const codigo = texto((await cuerpo(c))?.codigo, 30).toUpperCase();
   const r = await anadirExterna(c.env, c.get("usuario").id, codigo);
-  return "error" in r ? c.json(r, 400) : c.json(r);
+  if ("error" in r) return c.json(r, 400);
+  // Primera lectura ahora mismo (sale del feed de la provincia, ya en caché): así se ve con datos al momento
+  const f = await estacionPorSlug(c.env.DB, r.slug);
+  if (f) {
+    const t = ahora();
+    await leerEstacion(c.env, f, t).catch((e) => console.error("primera lectura", e));
+    await c.env.DB.prepare("UPDATE estaciones SET ultima_consulta = ? WHERE id = ?").bind(t, f.id).run();
+  }
+  return c.json(r);
 });
 
 app.delete("/admin/externas/:codigo", async (c) => {

@@ -20,6 +20,8 @@ import { leerEnvioConsola } from "../ecowitt";
 import { datosEstacion, estacionesPublicas, estacionPorSlug, estacionPorToken, type FilaEstacion } from "../estaciones";
 import { fechaAnterior, fechaLocal, inicioDia } from "../fechas";
 import { detalleEmbalse, estadoEmbalses } from "../embalses";
+import { catalogoExternas } from "../externas";
+import { PROVINCIAS_MC } from "../meteoclimatic";
 import { obtenerPrevision } from "../prevision";
 import { detalleAforo, estadoAforos } from "../aforos";
 import { anioAforo, previsionAforo, resumenAforo } from "../historico-aforos";
@@ -78,6 +80,22 @@ app.get("/red/temperaturas", async (c) => {
   await Promise.all(filas.map(async (f) => (series[f.slug] = await serieTemperatura(c.env.DB, f.id, desde))));
   c.header("Cache-Control", "public, max-age=120");
   return c.json(series);
+});
+
+/**
+ * Todas las estaciones de Meteoclimatic de una provincia (por defecto, Teruel) con su dato actual, para el mapa de
+ * Estaciones. Se lee del feed de la provincia (en caché unos minutos) y no se guarda: solo se guardan las dadas de alta.
+ */
+app.get("/estaciones/meteoclimatic", async (c) => {
+  const region = c.req.query("provincia") ?? "ESARA44";
+  if (!PROVINCIAS_MC[region]) return c.json({ error: "Provincia no válida" }, 400);
+  try {
+    c.header("Cache-Control", "public, max-age=300");
+    return c.json(await catalogoExternas(c.env.DB, region));
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "No se ha podido leer Meteoclimatic" }, 502);
+  }
 });
 
 // ----- Una estación -----

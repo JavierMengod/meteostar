@@ -8,6 +8,8 @@ import { MapContainer, Marker, TileLayer, Tooltip, useMap, useMapEvents } from "
 import SinPrefijo from "./SinPrefijo";
 import { n } from "../formato";
 
+const escapar = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
 export interface PuntoMapa {
   lat: number;
   lon: number;
@@ -22,22 +24,35 @@ export interface PuntoMapa {
   color?: string;
   /** Siempre con etiqueta y por encima de los demás (los ríos que sigues) */
   fijo?: boolean;
+  /** En vez de ir a «href», al pulsarlo se llama a esta función (p. ej. para abrir una ficha en la propia página) */
+  alPulsar?: () => void;
+  /** Más apagado (p. ej. estaciones que no están dadas de alta) */
+  atenuado?: boolean;
 }
 
-const escapar = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+/** Abre el marcador: un enlace, o un botón si el punto tiene «alPulsar». */
+const abrir = (p: PuntoMapa, extra = "") =>
+  p.alPulsar
+    ? `<span class="boton-mapa" role="button" tabindex="0"${extra}>`
+    : `<a href="${escapar(p.href)}"${p.href.startsWith("http") ? ' target="_blank" rel="noreferrer"' : ""}${extra}>`;
+const cerrar = (p: PuntoMapa) => (p.alPulsar ? "</span>" : "</a>");
+
+/** Texto del dato en el globo que sale al pasar el ratón. */
+const textoDato = (p: PuntoMapa) => p.etiqueta ?? (p.valor === null ? "" : `${n(p.valor)} °C`);
+
 
 const icono = (p: PuntoMapa, pequeno = false) =>
   L.divIcon({
-    className: `marcador ${p.oficial ? "oficial" : ""} ${pequeno ? "pequeno" : ""}`,
-    html: `<a href="${escapar(p.href)}"${p.href.startsWith("http") ? ' target="_blank" rel="noreferrer"' : ""}><span class="marcador-temp"${p.color ? ` style="background:${escapar(p.color)}"` : ""}>${p.etiqueta ? escapar(p.etiqueta) : p.valor === null ? "—" : `${n(p.valor)}°`}</span><span class="marcador-nombre">${escapar(p.nombre)}</span><i></i></a>`,
+    className: `marcador ${p.oficial ? "oficial" : ""} ${pequeno ? "pequeno" : ""} ${p.atenuado ? "atenuado" : ""}`,
+    html: `${abrir(p)}<span class="marcador-temp"${p.color ? ` style="background:${escapar(p.color)}"` : ""}>${p.etiqueta ? escapar(p.etiqueta) : p.valor === null ? "—" : `${n(p.valor)}°`}</span><span class="marcador-nombre">${escapar(p.nombre)}</span><i></i>${cerrar(p)}`,
     iconSize: [0, 0],
   });
 
 /** Solo un punto de color (sin etiqueta); el nombre y el dato salen al pasar el ratón o tocarlo. */
 const iconoPunto = (p: PuntoMapa) =>
   L.divIcon({
-    className: "punto-mapa",
-    html: `<a href="${escapar(p.href)}" aria-label="${escapar(p.nombre)}"><span${p.color ? ` style="background:${escapar(p.color)}"` : ""}></span></a>`,
+    className: `punto-mapa ${p.atenuado ? "atenuado" : ""}`,
+    html: `${abrir(p, ` aria-label="${escapar(p.nombre)}"`)}<span${p.color ? ` style="background:${escapar(p.color)}"` : ""}></span>${cerrar(p)}`,
     iconSize: [16, 16],
   });
 
@@ -56,12 +71,24 @@ function PuntosConEtiquetaFija({ puntos, pequeno }: { puntos: PuntoMapa[]; peque
     <>
       {orden.map((p) =>
         p.fijo || todas ? (
-          <Marker key={p.href} position={[p.lat, p.lon]} icon={icono(p, pequeno)} zIndexOffset={p.fijo ? 1000 : 0} />
+          <Marker
+            key={p.href}
+            position={[p.lat, p.lon]}
+            icon={icono(p, pequeno)}
+            zIndexOffset={p.fijo ? 1000 : p.atenuado ? -100 : 0}
+            eventHandlers={p.alPulsar ? { click: p.alPulsar } : undefined}
+          />
         ) : (
-          <Marker key={p.href} position={[p.lat, p.lon]} icon={iconoPunto(p)}>
+          <Marker
+            key={p.href}
+            position={[p.lat, p.lon]}
+            icon={iconoPunto(p)}
+            zIndexOffset={p.atenuado ? -100 : 0}
+            eventHandlers={p.alPulsar ? { click: p.alPulsar } : undefined}
+          >
             <Tooltip direction="top" offset={[0, -8]}>
               <b>{p.nombre}</b>
-              {p.etiqueta ? ` · ${p.etiqueta}` : ""}
+              {textoDato(p) ? ` · ${textoDato(p)}` : ""}
             </Tooltip>
           </Marker>
         ),

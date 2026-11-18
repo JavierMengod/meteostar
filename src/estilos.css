@@ -4032,3 +4032,66 @@ h3 {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Puntos del mapa que abren una ficha en la página (en vez de un enlace) y puntos apagados */
+.marcador .boton-mapa {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+.punto-mapa .boton-mapa {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.punto-mapa .boton-mapa:hover span {
+  transform: scale(1.3);
+}
+.punto-mapa.atenuado span {
+  width: 10px;
+  height: 10px;
+  opacity: 0.55;
+  box-shadow: none;
+}
+.marcador.atenuado .marcador-temp {
+  opacity: 0.6;
+}
+
+/* Estaciones de Meteoclimatic sin dar de alta */
+.ficha-libre {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 3px dashed var(--borde);
+}
+.ficha-libre p {
+  margin: 0;
+}
+.boton-cerrar {
+  border: 0;
+  background: none;
+  color: var(--texto-suave);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.fila-libre {
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.leyenda-rios i.leyenda-libre {
+  background: #0e9f6e;
+  opacity: 0.55;
+  transform: scale(0.8);
+}

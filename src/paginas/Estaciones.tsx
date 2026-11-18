@@ -1,11 +1,12 @@
-// Estaciones: igual que las páginas de ríos y embalses. Arriba las que sigue el usuario (sin cuenta, la de la web:
-// Villastar); debajo, todas las estaciones con buscador, filtro, mapa y lista desplegable (las de la red y las oficiales).
+// Estaciones: igual que las páginas de ríos y embalses. Arriba las que sigue el usuario; debajo, todas: las de
+// Meteostar (de la red, oficiales y de otras redes dadas de alta) y, en el mapa y al final de la lista, todas las de
+// Meteoclimatic de Teruel que aún no están dadas de alta (solo su último dato: no se guardan).
 import { Fragment, lazy, Suspense, useMemo, useState } from "react";
-import type { RespuestaDatos, RespuestaRed } from "../../shared/tipos";
+import type { EstacionExterna, RespuestaDatos, RespuestaRed } from "../../shared/tipos";
 import BotonSeguir from "../componentes/BotonSeguir";
 import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
 import TarjetaEstacion from "../componentes/TarjetaEstacion";
-import { useSesion } from "../datos";
+import { enviar, usePeticion, useSesion } from "../datos";
 import { COLOR_SIN_DATOS, ESCALA_TEMP, colorTemp, enDirecto } from "../estaciones";
 import { hace, n } from "../formato";
 import { useSeguidos } from "../seguidos";
@@ -55,34 +56,98 @@ function FilaEstacion({ d, ahora, seg }: { d: RespuestaDatos; ahora: number; seg
   );
 }
 
+/** Fila de una estación de Meteoclimatic sin dar de alta: al pulsarla se abre su ficha. */
+function FilaLibre({ e, ahora, onElegir }: { e: EstacionExterna; ahora: number; onElegir: () => void }) {
+  return (
+    <button type="button" className="fila-rio fila-libre" onClick={onElegir}>
+      <i className="punto-rio" style={{ background: colorTemp(e.temp), opacity: 0.6 }} aria-hidden="true" />
+      <span className="fila-rio-nombre">
+        <b>{e.nombre}</b>
+        <small className="suave">Meteoclimatic{e.t ? ` · ${hace(ahora - e.t)}` : ""}</small>
+      </span>
+      <span className="fila-rio-valor">
+        <b>{e.temp === null ? "—" : n(e.temp)}</b> <small className="suave">°C</small>
+      </span>
+      <span className="fila-rio-estado">
+        <span className="pastilla-normal" style={{ background: COLOR_SIN_DATOS }}>
+          Sin dar de alta
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** Ficha de una estación de Meteoclimatic que no está dada de alta (sus datos no se guardan). */
+function FichaLibre({ e, ahora, admin, onCerrar }: { e: EstacionExterna; ahora: number; admin: boolean; onCerrar: () => void }) {
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const alta = async () => {
+    setOcupado(true);
+    setError(null);
+    try {
+      const r = await enviar<{ slug: string }>("/api/admin/externas", "POST", { codigo: e.codigo });
+      // Recarga completa: así la red (menú, lista y mapa) ya la incluye
+      location.href = `/estacion/${r.slug}`;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se ha podido dar de alta");
+      setOcupado(false);
+    }
+  };
+  return (
+    <section className="tarjeta ficha-libre" id="ficha-libre">
+      <div className="tarjeta-rio-cabecera">
+        <div>
+          <h3>{e.nombre}</h3>
+          <p className="suave pequeno">Meteoclimatic · sin dar de alta en Meteostar</p>
+        </div>
+        <button type="button" className="boton-cerrar" onClick={onCerrar} aria-label="Cerrar">
+          ✕
+        </button>
+      </div>
+      <p className="numero-medio" style={{ color: colorTemp(e.temp) }}>
+        {e.temp === null ? "—" : n(e.temp)}
+        <sup>°C</sup>
+      </p>
+      <p className="suave pequeno">
+        {e.t ? `Dato de Meteoclimatic ${hace(ahora - e.t)}` : "Sin datos ahora mismo"}. Sus datos no se guardan en Meteostar: solo se ve el último. Para tener su
+        histórico y sus gráficas hay que darla de alta.
+      </p>
+      <div className="botones-ficha">
+        {admin && (
+          <button type="button" className="boton-principal" disabled={ocupado} onClick={alta}>
+            {ocupado ? "Dando de alta…" : "+ Dar de alta en Meteostar"}
+          </button>
+        )}
+        <a className="boton-secundario" href={`https://www.meteoclimatic.net/perfil/${e.codigo}`} target="_blank" rel="noreferrer">
+          Ver en Meteoclimatic
+        </a>
+      </div>
+      {error && <p className="aviso-externas">{error}</p>}
+    </section>
+  );
+}
+
 /** Un grupo de la lista que se abre y se cierra. */
-function GrupoEstaciones({
+function Grupo({
   titulo,
-  lista,
-  ahora,
-  seg,
+  resumen,
   abierto,
   onCambio,
+  children,
 }: {
   titulo: string;
-  lista: RespuestaDatos[];
-  ahora: number;
-  seg: Seguidos;
+  resumen: string;
   abierto: boolean;
   onCambio: (abierto: boolean) => void;
+  children: React.ReactNode;
 }) {
-  const directo = lista.filter((d) => enDirecto(d, ahora)).length;
   return (
     <details className="tarjeta lista-rios" open={abierto} onToggle={(ev) => onCambio((ev.currentTarget as HTMLDetailsElement).open)}>
       <summary>
         <span className="titulo-grupo">{titulo}</span>
-        <span className="suave pequeno">
-          {lista.length} {lista.length === 1 ? "estación" : "estaciones"} · {directo} en directo
-        </span>
+        <span className="suave pequeno">{resumen}</span>
       </summary>
-      {lista.map((d) => (
-        <FilaEstacion key={d.estacion.slug} d={d} ahora={ahora} seg={seg} />
-      ))}
+      {children}
     </details>
   );
 }
@@ -95,13 +160,17 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
   const [tipo, setTipo] = useState("");
   // Grupos abiertos a mano; al buscar o filtrar se abren todos los que tengan resultados
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  // Todas las de Meteoclimatic de Teruel, con su dato actual (las que no están dadas de alta no se guardan)
+  const { datos: catalogo } = usePeticion<EstacionExterna[]>("/api/estaciones/meteoclimatic", 5 * 60_000);
+  const [elegida, setElegida] = useState<string | null>(null);
   const estaciones = red?.estaciones ?? [];
-  const filtradas = useMemo(() => {
-    const q = quitarAcentos(busca.trim());
-    return estaciones.filter(
-      (d) => (!tipo || d.estacion.tipo === tipo) && (!q || quitarAcentos(`${d.estacion.nombre} ${d.estacion.municipio} ${d.estacion.red ?? ""}`).includes(q)),
-    );
-  }, [estaciones, busca, tipo]);
+  const q = quitarAcentos(busca.trim());
+  const filtradas = useMemo(
+    () => estaciones.filter((d) => (!tipo || d.estacion.tipo === tipo) && (!q || quitarAcentos(`${d.estacion.nombre} ${d.estacion.municipio} ${d.estacion.red ?? ""}`).includes(q))),
+    [estaciones, q, tipo],
+  );
+  const libres = useMemo(() => (catalogo ?? []).filter((e) => !e.enMeteostar), [catalogo]);
+  const libresFiltradas = useMemo(() => libres.filter((e) => (!tipo || tipo === "externa") && (!q || quitarAcentos(e.nombre).includes(q))), [libres, q, tipo]);
   if (!red) return <Cargando />;
   const { ahora } = red;
 
@@ -110,14 +179,29 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
   const extremos = destacadas.flatMap((d) => [d.hoy?.tmin, d.hoy?.tmax, d.actual?.temp]).filter((v): v is number => typeof v === "number");
   const escala: [number, number] | undefined = extremos.length ? [Math.min(...extremos) - 2, Math.max(...extremos) + 2] : undefined;
   const grupos = (["particular", "oficial", "externa"] as const).map((t) => [t, filtradas.filter((d) => d.estacion.tipo === t)] as const).filter(([, l]) => l.length);
-  const hayOtras = estaciones.some((d) => d.estacion.tipo !== "particular");
+  const libreElegida = libres.find((e) => e.codigo === elegida) ?? null;
+  const total = filtradas.length + libresFiltradas.length;
+  const abierto = (clave: string) => !!q || !!tipo || abiertos.has(clave);
+  const cambiar = (clave: string) => (a: boolean) =>
+    setAbiertos((prev) => {
+      const nuevo = new Set(prev);
+      if (a) nuevo.add(clave);
+      else nuevo.delete(clave);
+      return nuevo;
+    });
+  const elegir = (codigo: string) => {
+    setElegida(codigo);
+    // La ficha sale debajo del mapa
+    setTimeout(() => document.getElementById("ficha-libre")?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+  };
 
   return (
     <>
       <section className="cabecera-embalses">
         <h1>Estaciones</h1>
         <p className="suave">
-          Las estaciones de la red, de aficionados de la zona; las oficiales cercanas, y otras de aficionados que publican en Meteoclimatic. Pulsa una estación para ver todos sus datos, sus gráficas y su histórico.
+          Las estaciones meteorológicas de la zona: las de Meteostar y todas las de Meteoclimatic en la provincia de Teruel. Pulsa una estación para ver sus datos;
+          las dadas de alta en Meteostar tienen además sus gráficas y su histórico.
         </p>
       </section>
 
@@ -155,47 +239,65 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
         </>
       )}
 
-      <CabeceraSeccion titulo="Todas las estaciones" nota={`${estaciones.length} ${estaciones.length === 1 ? "estación" : "estaciones"}`} />
+      <CabeceraSeccion titulo="Todas las estaciones" nota={`${estaciones.length} en Meteostar${libres.length ? ` · ${libres.length} más en Meteoclimatic` : ""}`} />
       <p className="anadir-admin">
-        <a className="boton-secundario" href={admin ? "/admin" : usuario ? "/cuenta/estacion/nueva" : "/entrar"}>
+        <a className="boton-secundario" href={admin ? "/admin#otras-redes" : usuario ? "/cuenta/estacion/nueva" : "/entrar"}>
           + {admin ? "Añadir o gestionar estaciones" : "Añade tu estación"}
         </a>
-        <small className="suave">{admin ? "Solo lo ves tú, como administrador." : usuario ? "¿Tienes una estación? Súmala a la red." : "¿Tienes una estación? Entra con tu cuenta para sumarla a la red."}</small>
+        <small className="suave">
+          {admin
+            ? "Solo lo ves tú, como administrador. También puedes pulsar cualquier estación sin dar de alta y darla de alta."
+            : usuario
+              ? "¿Tienes una estación? Súmala a la red."
+              : "¿Tienes una estación? Entra con tu cuenta para sumarla a la red."}
+        </small>
       </p>
-      {estaciones.length > 4 && (
+      {estaciones.length + libres.length > 4 && (
         <div className="filtros-rios">
           <input type="search" value={busca} placeholder="Buscar una estación o un pueblo…" onChange={(e) => setBusca(e.target.value)} aria-label="Buscar una estación" />
-          {hayOtras && (
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)} aria-label="Tipo de estación">
-              <option value="">Todas</option>
-              <option value="particular">De la red</option>
-              <option value="oficial">Oficiales</option>
-              <option value="externa">Otras redes</option>
-            </select>
-          )}
+          <select value={tipo} onChange={(e) => setTipo(e.target.value)} aria-label="Tipo de estación">
+            <option value="">Todas</option>
+            <option value="particular">De la red</option>
+            <option value="oficial">Oficiales</option>
+            <option value="externa">Meteoclimatic</option>
+          </select>
         </div>
       )}
 
-      {filtradas.length > 0 && (
+      {total > 0 && (
         <Suspense fallback={<div className="mapa" />}>
           <Mapa
             alto={420}
-            margen={0.15}
+            margen={0.08}
             pequeno
-            soloFijos={filtradas.length > 8}
-            puntos={filtradas.map((d) => {
-              const temp = enDirecto(d, ahora) ? (d.actual?.temp ?? null) : null;
-              return {
-                lat: d.estacion.lat,
-                lon: d.estacion.lon,
-                nombre: d.estacion.nombre,
-                valor: temp,
-                href: `/estacion/${d.estacion.slug}`,
-                oficial: d.estacion.tipo === "oficial",
-                color: colorTemp(temp),
-                fijo: seg.destacados.includes(d.estacion.slug),
-              };
-            })}
+            soloFijos={total > 8}
+            puntos={[
+              // Las que no están dadas de alta: apagadas y, al pulsarlas, su ficha aquí debajo
+              ...libresFiltradas.map((e) => ({
+                lat: e.lat,
+                lon: e.lon,
+                nombre: e.nombre,
+                valor: e.temp,
+                href: `meteoclimatic:${e.codigo}`,
+                color: colorTemp(e.temp),
+                atenuado: true,
+                fijo: e.codigo === elegida,
+                alPulsar: () => elegir(e.codigo),
+              })),
+              ...filtradas.map((d) => {
+                const temp = enDirecto(d, ahora) ? (d.actual?.temp ?? null) : null;
+                return {
+                  lat: d.estacion.lat,
+                  lon: d.estacion.lon,
+                  nombre: d.estacion.nombre,
+                  valor: temp,
+                  href: `/estacion/${d.estacion.slug}`,
+                  oficial: d.estacion.tipo === "oficial",
+                  color: colorTemp(temp),
+                  fijo: seg.destacados.includes(d.estacion.slug),
+                };
+              }),
+            ]}
           />
         </Suspense>
       )}
@@ -205,42 +307,52 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
             <i style={{ background: color }} /> {texto}{" "}
           </Fragment>
         ))}
-        <i style={{ background: COLOR_SIN_DATOS }} /> Sin datos
+        <i style={{ background: COLOR_SIN_DATOS }} /> Sin datos <i className="leyenda-libre" /> Sin dar de alta
       </p>
+      {libreElegida && <FichaLibre e={libreElegida} ahora={ahora} admin={admin} onCerrar={() => setElegida(null)} />}
 
-      {grupos.length ? (
-        grupos.map(([t, lista]) => (
-          <GrupoEstaciones
-            key={t}
-            titulo={GRUPOS[t]}
-            lista={lista}
-            ahora={ahora}
-            seg={seg}
-            abierto={!!busca.trim() || !!tipo || abiertos.has(t)}
-            onCambio={(abierto) =>
-              setAbiertos((prev) => {
-                const nuevo = new Set(prev);
-                if (abierto) nuevo.add(t);
-                else nuevo.delete(t);
-                return nuevo;
-              })
-            }
-          />
-        ))
+      {total > 0 ? (
+        <>
+          {grupos.map(([t, lista]) => (
+            <Grupo
+              key={t}
+              titulo={GRUPOS[t]}
+              resumen={`${lista.length} ${lista.length === 1 ? "estación" : "estaciones"} · ${lista.filter((d) => enDirecto(d, ahora)).length} en directo`}
+              abierto={abierto(t)}
+              onCambio={cambiar(t)}
+            >
+              {lista.map((d) => (
+                <FilaEstacion key={d.estacion.slug} d={d} ahora={ahora} seg={seg} />
+              ))}
+            </Grupo>
+          ))}
+          {libresFiltradas.length > 0 && (
+            <Grupo
+              titulo="Más estaciones de Meteoclimatic"
+              resumen={`${libresFiltradas.length} sin dar de alta · solo su último dato`}
+              abierto={abierto("libres")}
+              onCambio={cambiar("libres")}
+            >
+              {libresFiltradas.map((e) => (
+                <FilaLibre key={e.codigo} e={e} ahora={ahora} onElegir={() => elegir(e.codigo)} />
+              ))}
+            </Grupo>
+          )}
+        </>
       ) : (
-        <p className="vacio">{estaciones.length ? "Ninguna estación coincide con la búsqueda." : "Todavía no hay estaciones en la red."}</p>
+        <p className="vacio">{estaciones.length + libres.length ? "Ninguna estación coincide con la búsqueda." : "Todavía no hay estaciones."}</p>
       )}
 
       <p className="pie-fuente">
-        Datos: las estaciones de los usuarios de la red, en directo · Oficiales:{" "}
-        <a href="https://opendata.aemet.es/" target="_blank" rel="noreferrer">
-          AEMET OpenData
-        </a>{" "}
-        (© AEMET, datos horarios) · Otras redes:{" "}
+        Datos: las estaciones de los usuarios de la red, en directo · Otras redes:{" "}
         <a href="https://www.meteoclimatic.net/" target="_blank" rel="noreferrer">
           Meteoclimatic
         </a>{" "}
-        (CC BY-NC-ND) · <a href="/fuentes">Fuentes</a>
+        (CC BY-NC-ND) · Oficiales:{" "}
+        <a href="https://opendata.aemet.es/" target="_blank" rel="noreferrer">
+          AEMET OpenData
+        </a>{" "}
+        · <a href="/fuentes">Fuentes</a>
       </p>
     </>
   );

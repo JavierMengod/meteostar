@@ -23,6 +23,7 @@ export default function Red({ red, prevision }: { red: RespuestaRed | null; prev
   const { ahora } = red;
   const particulares = red.estaciones.filter((d) => d.estacion.tipo === "particular");
   const oficiales = red.estaciones.filter((d) => d.estacion.tipo === "oficial");
+  const externas = red.estaciones.filter((d) => d.estacion.tipo === "externa");
   const enDirecto = red.estaciones.filter((d) => estaEnDirecto(d, ahora));
   // Las medias de la cabecera, solo con las estaciones de la red (las oficiales son horarias y van aparte)
   const deLaRed = enDirecto.filter((d) => d.estacion.tipo === "particular");
@@ -79,16 +80,28 @@ export default function Red({ red, prevision }: { red: RespuestaRed | null; prev
         }
       />
 
-      <CabeceraSeccion titulo="Estaciones" nota="Pulsa una estación para ver todos sus datos" />
-      {particulares.length ? (
-        <div className="rejilla-3">
-          {particulares.map((d) => (
-            <TarjetaEstacion key={d.estacion.id} d={d} escala={escala} />
-          ))}
-        </div>
-      ) : (
-        <p className="vacio">Todavía no hay estaciones en la red.</p>
+      {particulares.length > 0 && (
+        <>
+          <CabeceraSeccion titulo="Estaciones" nota="Pulsa una estación para ver todos sus datos" />
+          <div className="rejilla-3">
+            {particulares.map((d) => (
+              <TarjetaEstacion key={d.estacion.id} d={d} escala={escala} />
+            ))}
+          </div>
+        </>
       )}
+
+      {externas.length > 0 && (
+        <>
+          <CabeceraSeccion titulo={particulares.length ? "Otras redes" : "Estaciones"} nota={<a href="/estaciones">Ver todas las estaciones de la zona ›</a>} />
+          <div className="rejilla-3">
+            {externas.map((d) => (
+              <TarjetaEstacion key={d.estacion.id} d={d} escala={escala} />
+            ))}
+          </div>
+        </>
+      )}
+      {!particulares.length && !externas.length && <p className="vacio">Todavía no hay estaciones. <a href="/estaciones">Ver las de la zona ›</a></p>}
 
       {oficiales.length > 0 && (
         <>
