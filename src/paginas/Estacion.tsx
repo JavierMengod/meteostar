@@ -14,6 +14,7 @@ import {
   Panel,
 } from "../componentes/Graficas";
 import {
+  mediaTemp,
   DiariaHumedad,
   DiariaLluvia,
   DiariaPresion,
@@ -136,6 +137,7 @@ const FUENTES: Record<string, string> = {
   directo: "Envío directo desde la consola",
   push: "Envío directo desde la consola",
   ecowitt_api: "ecowitt.net",
+  ecowitt_historico: "ecowitt.net (histórico)",
   api: "ecowitt.net",
   wunderground: "Weather Underground",
   meteoclimatic: "Meteoclimatic",
@@ -706,20 +708,25 @@ function ConsultarDia({ base, hoy, desde, elegido }: { base: string; hoy: string
   }, [elegido]);
   const { datos: r } = usePeticion<ResumenDiario | null>(`${base}/dia?fecha=${fecha}`, 0);
   const minimo = desde ?? hoy;
-  const casillas: [string, string, string, string | null][] = r
+  const deHoja = r?.origen === "hoja";
+  // [título, valor, unidad, hora, ¿hay dato?]: los días de la hoja de cálculo solo tienen algunos (se ocultan los demás)
+  const todas: [string, string, string, string | null, boolean][] = r
     ? [
-        ["Temp. máxima", n(r.tmax), "°C", hora(r.tmax_ts)],
-        ["Temp. mínima", n(r.tmin), "°C", hora(r.tmin_ts)],
-        ["Humedad máx. / mín.", `${n(r.hum_max, 0)} / ${n(r.hum_min, 0)}`, "%", null],
-        ["Viento medio máx.", n(r.viento_max), "km/h", null],
-        ["Racha máxima", n(r.racha_max, 0), "km/h", hora(r.racha_max_ts)],
-        ["Presión máx. / mín.", `${n(r.presion_max)} / ${n(r.presion_min)}`, "hPa", null],
-        ["Precipitación", n(r.lluvia), "mm", null],
-        ["Intensidad máx.", n(r.intensidad_max), "mm/h", r.intensidad_max ? hora(r.intensidad_max_ts) : null],
-        ["Radiación solar máx.", n(r.radiacion_max, 0), "W/m²", null],
-        ["Índice UV máx.", n(r.uv_max, 0), "", null],
+        ["Temp. máxima", n(r.tmax), "°C", r.tmax_ts ? hora(r.tmax_ts) : null, r.tmax !== null],
+        ["Temp. mínima", n(r.tmin), "°C", r.tmin_ts ? hora(r.tmin_ts) : null, r.tmin !== null],
+        ["Temp. media", n(mediaTemp(r)), "°C", null, mediaTemp(r) !== null],
+        ["Humedad máx. / mín.", `${n(r.hum_max, 0)} / ${n(r.hum_min, 0)}`, "%", null, r.hum_max !== null],
+        ["Viento medio máx.", n(r.viento_max), "km/h", null, r.viento_max !== null],
+        ["Racha máxima", n(r.racha_max, 0), "km/h", r.racha_max_ts ? hora(r.racha_max_ts) : null, r.racha_max !== null],
+        ["Presión máx. / mín.", `${n(r.presion_max)} / ${n(r.presion_min)}`, "hPa", null, r.presion_max !== null],
+        ["Precipitación", n(r.lluvia), "mm", null, r.lluvia !== null],
+        ["Intensidad máx.", n(r.intensidad_max), "mm/h", r.intensidad_max ? hora(r.intensidad_max_ts) : null, r.intensidad_max !== null],
+        ["Radiación solar máx.", n(r.radiacion_max, 0), "W/m²", null, r.radiacion_max !== null],
+        ["Índice UV máx.", n(r.uv_max, 0), "", null, r.uv_max !== null],
+        ["Rayos", String(r.rayos ?? "—"), "", null, r.rayos !== null && r.rayos !== undefined],
       ]
     : [];
+  const casillas = todas.filter((c) => !deHoja || c[4]).map(([t, v, u, h]) => [t, v, u, h] as const);
   return (
     <>
       <CabeceraSeccion id="consultar-dia" titulo="Consultar un día" nota={`Extremos de cualquier día desde el ${fechaCorta(minimo, true)}`} />
@@ -736,6 +743,12 @@ function ConsultarDia({ base, hoy, desde, elegido }: { base: string; hoy: string
             ›
           </button>
         </div>
+        {r && deHoja && (
+          <p className="aviso-hoja suave pequeno">
+            Día anterior a ecowitt.net: sale de la hoja de cálculo de la estación, que guarda los extremos del día sin su hora (ni humedad,
+            presión o radiación).
+          </p>
+        )}
         {r ? (
           <div className="casillas">
             {casillas.map(([t, v, u, h]) => (

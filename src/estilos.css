@@ -4167,3 +4167,11 @@ h3 {
 .extremos-anio .periodos {
   margin-bottom: 10px;
 }
+
+/* Consultar un día: aviso de los días importados de una hoja de cálculo */
+.aviso-hoja {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--superficie-2);
+}

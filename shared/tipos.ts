@@ -50,6 +50,8 @@ export interface ResumenDiario {
   temp_n?: number | null;
   viento_suma?: number | null;
   viento_n?: number | null;
+  /** De dónde sale: null = lecturas de la estación; "hoja" = importado de una hoja de cálculo (sin horas) */
+  origen?: string | null;
   lecturas: number;
 }
 

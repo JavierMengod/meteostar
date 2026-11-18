@@ -29,3 +29,16 @@ Los del Ebro (4–7) se generaron de la carpeta `EBRO` del anuario: el código d
 Sin histórico en el anuario: Albentosa a la salida de Los Toranes, Jiloca en Villarquemado, Martín en Montalbán,
 Guadalope y Pitarque en Villarluengo, Bordón y Barranco de Tornos (estaciones del SAIH que no son del anuario).
 Río Seco en Oliete (9262) está, pero solo con nivel, sin caudal, y no se ha cargado.
+
+# Histórico de Villastar de la hoja de cálculo (2025 – abril de 2026)
+
+`hoja-villastar.sql`: los días del 1/1/2025 al 26/4/2026 (481), de la hoja de cálculo de la estación (Ecowitt), anteriores
+a lo que guarda ecowitt.net. Generado con `scripts/importar-hoja.mjs` a partir de la hoja «Datos_diarios» exportada a CSV.
+Lluvia, máxima, mínima, media, viento medio, viento máximo y racha de cada día (sin hora ni humedad, presión o
+radiación). Solo añade días que no existen (no pisa nada) y los marca con `origen = 'hoja'`.
+
+En producción, **después** de crear Villastar (slug `villastar`) e importar su histórico de ecowitt.net:
+
+```
+npx wrangler d1 execute meteostar --remote --file datos/hoja-villastar.sql
+```
