@@ -109,11 +109,13 @@ function FranjaPeriodo({ datos }: { datos: PuntoHistorico[] }) {
         <small>Lluvia</small>
         <b className="lluvia">{n(r.lluvia)} mm</b>
       </div>
-      <div>
-        <small>Racha máx.</small>
-        <b>{n(r.racha?.racha, 0)} km/h</b>
-        <span className="mono">{r.racha ? cuando(r.racha.t) : ""}</span>
-      </div>
+      {r.racha && (
+        <div>
+          <small>Racha máx.</small>
+          <b>{n(r.racha.racha, 0)} km/h</b>
+          <span className="mono">{cuando(r.racha.t)}</span>
+        </div>
+      )}
       <div>
         <small>Presión</small>
         <b>{r.presion === null ? "—" : `${conSigno(r.presion)} hPa`}</b>
@@ -178,6 +180,19 @@ export default function Estacion({ slug, prevision }: Props) {
   const bf = beaufort(a?.viento ?? null);
   const presionTendencia = a?.presion != null && e.hace3h?.presion != null ? a.presion - e.hace3h.presion : null;
   const t24 = h24?.map((p) => p.temp).filter((v): v is number => v !== null) ?? [];
+  // Lo que mide esta estación (las de otras redes no dan radiación, UV, interior…): lo que no mide, no se enseña
+  const tiene = {
+    sol: a?.radiacion != null || e.hoy?.radiacion_max != null,
+    uv: a?.uv != null || e.hoy?.uv_max != null,
+    interior: a?.temp_int != null,
+    racha: a?.racha != null,
+    intensidad: a?.intensidad != null || e.hoy?.intensidad_max != null,
+  };
+  // Totales del mes y del año: si la estación empezó después, se dice desde cuándo (y no «Año 2026: 0 mm»)
+  const hoyFecha = fechaDe(e.ahora);
+  const empiezaMes = !!e.desde && e.desde > `${hoyFecha.slice(0, 7)}-01`;
+  const empiezaAnio = !!e.desde && e.desde > `${hoyFecha.slice(0, 4)}-01-01`;
+  const desdeTexto = e.desde ? `Desde el ${fechaCorta(e.desde)}` : "";
 
   return (
     <>
@@ -204,7 +219,7 @@ export default function Estacion({ slug, prevision }: Props) {
         <p className="vacio">Todavía no hay datos de la estación.</p>
       ) : (
         <>
-          <div className="rejilla-estacion">
+          <div className={`rejilla-estacion ${tiene.sol || tiene.uv ? "" : "sin-sol"}`}>
             {/* Temperatura */}
             <section className="tarjeta area-temp">
               <div className="t-cabecera">
@@ -222,13 +237,14 @@ export default function Estacion({ slug, prevision }: Props) {
               <BarraMinMax min={e.hoy?.tmin ?? null} max={e.hoy?.tmax ?? null} actual={a.temp} />
               <div className="te-minmax">
                 <span>
-                  Mín. <b className="frio">{n(e.hoy?.tmin)}°</b> <small className="mono">{hora(e.hoy?.tmin_ts)}</small>
+                  Mín. <b className="frio">{n(e.hoy?.tmin)}°</b> {e.hoy?.tmin_ts ? <small className="mono">{hora(e.hoy.tmin_ts)}</small> : null}
                 </span>
                 <span>
-                  Máx. <b className="calor">{n(e.hoy?.tmax)}°</b> <small className="mono">{hora(e.hoy?.tmax_ts)}</small>
+                  Máx. <b className="calor">{n(e.hoy?.tmax)}°</b> {e.hoy?.tmax_ts ? <small className="mono">{hora(e.hoy.tmax_ts)}</small> : null}
                 </span>
               </div>
               <dl className="lista-datos">
+                {e.hace24h && (
                 <div>
                   <dt>Ayer a esta hora</dt>
                   <dd>
@@ -238,12 +254,15 @@ export default function Estacion({ slug, prevision }: Props) {
                     )}
                   </dd>
                 </div>
+                )}
+                {e.ayer && (
                 <div>
                   <dt>Ayer</dt>
                   <dd>
-                    <span className="calor">{n(e.ayer?.tmax)}°</span> / <span className="frio">{n(e.ayer?.tmin)}°</span>
+                    <span className="calor">{n(e.ayer.tmax)}°</span> / <span className="frio">{n(e.ayer.tmin)}°</span>
                   </dd>
                 </div>
+                )}
               </dl>
               {h24 && h24.length > 1 && (
                 <div className="mini">
@@ -312,14 +331,16 @@ export default function Estacion({ slug, prevision }: Props) {
               </div>
               <p className="mono pequeno centrado">Escala de Beaufort · fuerza {bf.fuerza}</p>
               <div className="cajitas">
-                <div>
-                  <small>Racha ahora</small>
-                  <b>{n(a.racha, 0)} km/h</b>
-                </div>
+                {tiene.racha && (
+                  <div>
+                    <small>Racha ahora</small>
+                    <b>{n(a.racha, 0)} km/h</b>
+                  </div>
+                )}
                 <div>
                   <small>Racha máx.</small>
                   <b>{n(e.hoy?.racha_max, 0)} km/h</b>
-                  <small className="mono">{hora(e.hoy?.racha_max_ts)}</small>
+                  {e.hoy?.racha_max_ts ? <small className="mono">{hora(e.hoy.racha_max_ts)}</small> : null}
                 </div>
                 <div>
                   <small>Media hoy</small>
@@ -338,24 +359,35 @@ export default function Estacion({ slug, prevision }: Props) {
                     {n(a.lluvia_dia)}
                     <sup>mm</sup>
                   </p>
-                  <p className="suave">
-                    Intensidad ahora <b>{n(a.intensidad)} mm/h</b>
-                  </p>
-                  <p className="suave">
-                    Intensidad máx. <b>{n(e.hoy?.intensidad_max)} mm/h</b>
-                  </p>
+                  {tiene.intensidad && (
+                    <>
+                      <p className="suave">
+                        Intensidad ahora <b>{n(a.intensidad)} mm/h</b>
+                      </p>
+                      <p className="suave">
+                        Intensidad máx. <b>{n(e.hoy?.intensidad_max)} mm/h</b>
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="acumulados">
                 <Dato e="Última hora" v={e.lluvia.ultimaHora} />
                 <Dato e="24 horas" v={e.lluvia.h24} />
                 <Dato e="7 días" v={e.lluvia.d7} />
-                <Dato e={capital(soloMes(fechaDe(e.ahora).slice(0, 7)))} v={e.lluvia.mes} />
-                <Dato e={`Año ${fechaDe(e.ahora).slice(0, 4)}`} v={e.lluvia.anio} />
+                {empiezaMes ? (
+                  <Dato e={desdeTexto} v={e.lluvia.mes} />
+                ) : (
+                  <>
+                    <Dato e={capital(soloMes(hoyFecha.slice(0, 7)))} v={e.lluvia.mes} />
+                    <Dato e={empiezaAnio ? desdeTexto : `Año ${hoyFecha.slice(0, 4)}`} v={e.lluvia.anio} />
+                  </>
+                )}
               </div>
             </section>
 
             {/* Radiación */}
+            {tiene.sol && (
             <section className="tarjeta area-sol">
               <h3>Radiación solar</h3>
               <p className="numero-medio">
@@ -366,8 +398,10 @@ export default function Estacion({ slug, prevision }: Props) {
                 Máx. hoy <b>{n(e.hoy?.radiacion_max, 0)} W/m²</b>
               </p>
             </section>
+            )}
 
             {/* UV */}
+            {tiene.uv && (
             <section className="tarjeta area-uv">
               <h3>Índice UV</h3>
               <p className="numero-medio">{n(a.uv, 0)}</p>
@@ -380,9 +414,11 @@ export default function Estacion({ slug, prevision }: Props) {
                 Riesgo <b>{nivelUv(a.uv)}</b> · máx. hoy {n(e.hoy?.uv_max, 0)}
               </p>
             </section>
+            )}
           </div>
 
           <div className="rejilla-3 seccion">
+            {tiene.interior && (
             <section className="tarjeta">
               <h3>Interior · consola</h3>
               <p className="numero-medio">
@@ -393,6 +429,7 @@ export default function Estacion({ slug, prevision }: Props) {
                 Humedad interior <b>{n(a.hum_int, 0)} %</b>
               </p>
             </section>
+            )}
             <section className="tarjeta">
               <h3>Sol</h3>
               {dia0 ? (
@@ -466,15 +503,19 @@ export default function Estacion({ slug, prevision }: Props) {
                 <Panel titulo="Viento" nota="km/h">
                   <GraficaViento datos={historico} marco={marco} />
                 </Panel>
-                <Panel titulo="Dirección del viento" nota="de dónde sopla · punto más grande = más viento">
-                  <GraficaDireccion datos={historico} marco={marco} />
-                </Panel>
+                {historico.some((p) => p.dir !== null) && (
+                  <Panel titulo="Dirección del viento" nota="de dónde sopla · punto más grande = más viento">
+                    <GraficaDireccion datos={historico} marco={marco} />
+                  </Panel>
+                )}
                 <Panel titulo="Precipitación" nota="mm · mm/h">
                   <GraficaLluvia datos={historico} marco={marco} />
                 </Panel>
-                <Panel titulo="Radiación solar y UV" nota="W/m² · índice UV">
-                  <GraficaSol datos={historico} marco={marco} />
-                </Panel>
+                {historico.some((p) => p.radiacion !== null || p.uv !== null) && (
+                  <Panel titulo="Radiación solar y UV" nota="W/m² · índice UV">
+                    <GraficaSol datos={historico} marco={marco} />
+                  </Panel>
+                )}
                 {historico.some((p) => p.rayos !== null && p.rayos !== undefined) && (
                   <Panel titulo="Rayos" nota="detectados por la estación · km del último">
                     {historico.some((p) => (p.rayos ?? 0) > 0) ? (
@@ -557,9 +598,16 @@ export default function Estacion({ slug, prevision }: Props) {
       </div>
 
       <CabeceraSeccion titulo="Extremos y récords" nota={e.desde ? `Datos desde el ${fechaCorta(e.desde, true)}` : undefined} />
-      <TablaExtremos titulo={capital(nombreMes(fechaDe(e.ahora).slice(0, 7)))} ex={e.mes} tipo="mes" />
-      <ExtremosAnio base={base} actual={e.anio} anioActual={Number(fechaDe(e.ahora).slice(0, 4))} desde={e.desde} />
-      <TablaExtremos titulo="Récords de la estación" ex={e.records} tipo="records" />
+      {/* Con pocos datos, una sola tabla (las del mes, el año y los récords serían la misma) */}
+      {empiezaMes ? (
+        <TablaExtremos titulo={`Desde que está en Meteostar (${fechaCorta(e.desde!)})`} ex={e.records} tipo="mes" />
+      ) : (
+        <>
+          <TablaExtremos titulo={capital(nombreMes(hoyFecha.slice(0, 7)))} ex={e.mes} tipo="mes" />
+          <ExtremosAnio base={base} actual={e.anio} anioActual={Number(hoyFecha.slice(0, 4))} desde={e.desde} />
+          {!empiezaAnio && <TablaExtremos titulo="Récords de la estación" ex={e.records} tipo="records" />}
+        </>
+      )}
 
       <ConsultarDia base={base} hoy={fechaDe(e.ahora)} desde={e.desde} elegido={diaConsulta} />
 
@@ -708,7 +756,8 @@ function ConsultarDia({ base, hoy, desde, elegido }: { base: string; hoy: string
   }, [elegido]);
   const { datos: r } = usePeticion<ResumenDiario | null>(`${base}/dia?fecha=${fecha}`, 0);
   const minimo = desde ?? hoy;
-  const deHoja = r?.origen === "hoja";
+  // Días importados (hoja de cálculo, Weather Underground): solo se enseñan los datos que tienen
+  const deHoja = !!r?.origen;
   // [título, valor, unidad, hora, ¿hay dato?]: los días de la hoja de cálculo solo tienen algunos (se ocultan los demás)
   const todas: [string, string, string, string | null, boolean][] = r
     ? [
@@ -743,10 +792,13 @@ function ConsultarDia({ base, hoy, desde, elegido }: { base: string; hoy: string
             ›
           </button>
         </div>
-        {r && deHoja && (
+        {r?.origen && (
           <p className="aviso-hoja suave pequeno">
-            Día anterior a ecowitt.net: sale de la hoja de cálculo de la estación, que guarda los extremos del día sin su hora (ni humedad,
-            presión o radiación).
+            {r.origen === "wu"
+              ? "Día anterior a ecowitt.net: datos de la misma estación en Weather Underground (lecturas cada 5 minutos); la lluvia, de la hoja de cálculo de la estación."
+              : r.origen === "hoja+wu"
+                ? "Día anterior a ecowitt.net: de la hoja de cálculo de la estación anterior, completada con sus datos de Weather Underground (humedad, presión, radiación y horas de los extremos)."
+                : "Día anterior a ecowitt.net: sale de la hoja de cálculo de la estación, que guarda los extremos del día sin su hora (ni humedad, presión o radiación)."}
           </p>
         )}
         {r ? (

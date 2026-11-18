@@ -4175,3 +4175,23 @@ h3 {
   border-radius: 8px;
   background: var(--superficie-2);
 }
+
+/* Estación sin radiación ni UV (p. ej. de Meteoclimatic): la rejilla sin esa fila */
+.rejilla-estacion.sin-sol {
+  grid-template-areas:
+    "temp hum pres viento"
+    "temp lluvia lluvia viento";
+}
+@media (max-width: 1020px) {
+  .rejilla-estacion.sin-sol {
+    grid-template-areas:
+      "temp viento"
+      "hum pres"
+      "lluvia lluvia";
+  }
+}
+@media (max-width: 600px) {
+  .rejilla-estacion.sin-sol {
+    grid-template-areas: "temp" "viento" "hum" "pres" "lluvia";
+  }
+}
