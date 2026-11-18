@@ -23,6 +23,9 @@ const NOMBRE_RED = { meteoclimatic: "Meteoclimatic", wunderground: "Weather Unde
 const enlaceRed = (e: EstacionExterna) =>
   e.fuente === "meteoclimatic" ? `https://www.meteoclimatic.net/perfil/${e.codigo}` : `https://www.wunderground.com/dashboard/pws/${e.codigo}`;
 
+/** Estaciones de otras redes que puede dar de alta cada usuario (igual que en el servidor) */
+const MAX_EXTERNAS_USUARIO = 5;
+
 const GRUPOS = { particular: "Estaciones de la red", oficial: "Estaciones oficiales", externa: "Otras redes de aficionados" } as const;
 
 /** Fila compacta de la lista de todas las estaciones. */
@@ -96,13 +99,14 @@ function FilaLibre({ e, ahora, onElegir }: { e: EstacionExterna; ahora: number; 
 function FichaLibre({
   e: base,
   ahora,
-  admin,
+  usuario,
   onCerrar,
   onDato,
 }: {
   e: EstacionExterna;
   ahora: number;
-  admin: boolean;
+  /** Quién mira: cualquier usuario con cuenta puede darla de alta (con límite); sin cuenta, no */
+  usuario: { rol: string } | null;
   onCerrar: () => void;
   /** Para que el mapa y la lista enseñen también el dato pedido */
   onDato: (codigo: string, dato: { t: number | null; temp: number | null }) => void;
@@ -132,7 +136,7 @@ function FichaLibre({
     setOcupado(true);
     setError(null);
     try {
-      const r = await enviar<{ slug: string }>("/api/admin/externas", "POST", { codigo: e.codigo, fuente: e.fuente });
+      const r = await enviar<{ slug: string }>("/api/cuenta/externas", "POST", { codigo: e.codigo, fuente: e.fuente });
       // Recarga completa: así la red (menú, lista y mapa) ya la incluye
       location.href = `/estacion/${r.slug}`;
     } catch (err) {
@@ -171,15 +175,22 @@ function FichaLibre({
         se guardan en Meteostar: solo se ve el último. Para tener sus gráficas y su histórico hay que darla de alta{e.fuente === "wunderground" ? " (el de años atrás se traerá de Weather Underground)" : ""}.
       </p>
       <div className="botones-ficha">
-        {admin && (
+        {usuario ? (
           <button type="button" className="boton-principal" disabled={ocupado} onClick={alta}>
             {ocupado ? "Dando de alta…" : "+ Dar de alta en Meteostar"}
           </button>
+        ) : (
+          <a className="boton-principal" href="/entrar">
+            Entra para darla de alta
+          </a>
         )}
         <a className="boton-secundario" href={enlaceRed(e)} target="_blank" rel="noreferrer">
           Ver en {NOMBRE_RED[e.fuente]}
         </a>
       </div>
+      {usuario && usuario.rol !== "admin" && (
+        <p className="suave pequeno">Cada usuario puede dar de alta hasta {MAX_EXTERNAS_USUARIO} estaciones de otras redes; las puede quitar desde su cuenta.</p>
+      )}
       {error && <p className="aviso-externas">{error}</p>}
     </section>
   );
@@ -316,8 +327,8 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
           {admin
             ? "Solo lo ves tú, como administrador. También puedes pulsar cualquier estación sin dar de alta y darla de alta."
             : usuario
-              ? "¿Tienes una estación? Súmala a la red."
-              : "¿Tienes una estación? Entra con tu cuenta para sumarla a la red."}
+              ? `¿Tienes una estación? Súmala a la red. También puedes dar de alta hasta ${MAX_EXTERNAS_USUARIO} de otras redes: pulsa una del mapa.`
+              : "¿Tienes una estación? Entra con tu cuenta para sumarla a la red, o para dar de alta las de otras redes."}
         </small>
       </p>
       {estaciones.length + libres.length > 4 && (
@@ -378,7 +389,7 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
         <i style={{ background: COLOR_SIN_DATOS }} /> Sin datos <i className="leyenda-libre" /> Sin dar de alta <i className="leyenda-libre" style={{ background: COLOR_AL_PULSAR }} />{" "}
         Weather Underground (dato al pulsar)
       </p>
-      {libreElegida && <FichaLibre e={libreElegida} ahora={ahora} admin={admin} onCerrar={() => setElegida(null)} onDato={(c, d) => setPedidos((p) => ({ ...p, [c]: d }))} />}
+      {libreElegida && <FichaLibre e={libreElegida} ahora={ahora} usuario={usuario ?? null} onCerrar={() => setElegida(null)} onDato={(c, d) => setPedidos((p) => ({ ...p, [c]: d }))} />}
 
       {total > 0 ? (
         <>

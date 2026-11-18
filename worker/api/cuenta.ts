@@ -420,11 +420,13 @@ app.post("/admin/externas/cruzar", async (c) => {
   }
 });
 
-app.post("/admin/externas", async (c) => {
+/** Dar de alta una estación de otra red: cualquier usuario (con límite) o el administrador. */
+async function altaExterna(c: any) {
   const b = await cuerpo(c);
   const codigo = texto(b?.codigo, 30).toUpperCase();
   const fuente = b?.fuente === "wunderground" ? "wunderground" : "meteoclimatic";
-  const r = await anadirExterna(c.env, c.get("usuario").id, fuente, codigo);
+  const u = c.get("usuario") as Usuario;
+  const r = await anadirExterna(c.env, { id: u.id, rol: u.rol }, fuente, codigo);
   if ("error" in r) return c.json(r, 400);
   // Primera lectura ahora mismo (sale del feed de la provincia, ya en caché): así se ve con datos al momento
   const f = await estacionPorSlug(c.env.DB, r.slug);
@@ -434,12 +436,19 @@ app.post("/admin/externas", async (c) => {
     await c.env.DB.prepare("UPDATE estaciones SET ultima_consulta = ? WHERE id = ?").bind(t, f.id).run();
   }
   return c.json(r);
-});
+}
 
-app.delete("/admin/externas/:codigo", async (c) => {
-  const ok = await quitarExterna(c.env.DB, c.req.param("codigo").toUpperCase());
-  return ok ? c.json({ ok: true }) : c.json({ error: "No está en Meteostar" }, 404);
-});
+app.post("/admin/externas", (c) => altaExterna(c));
+app.post("/cuenta/externas", (c) => altaExterna(c));
+
+/** Quitar una estación de otra red: quien la dio de alta o el administrador. */
+async function bajaExterna(c: any) {
+  const u = c.get("usuario") as Usuario;
+  const r = await quitarExterna(c.env.DB, String(c.req.param("codigo")).toUpperCase(), { id: u.id, rol: u.rol });
+  return r === true ? c.json({ ok: true }) : c.json(r, 400);
+}
+app.delete("/admin/externas/:codigo", (c) => bajaExterna(c));
+app.delete("/cuenta/externas/:codigo", (c) => bajaExterna(c));
 
 // ----- Embalses que se muestran -----
 

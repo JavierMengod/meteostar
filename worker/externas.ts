@@ -87,13 +87,45 @@ async function altitudDe(lat: number, lon: number): Promise<number> {
   }
 }
 
-/** Añade una estación de otra red (los datos salen de la lista del servidor, no de lo que mande el navegador). */
-export async function anadirExterna(env: Env, adminId: number, fuente: Fuente, codigo: string): Promise<{ slug: string } | { error: string }> {
-  if (!/^[A-Z0-9]{4,25}$/.test(codigo)) return { error: "Código no válido" };
-  const col = COLUMNA[fuente];
-  if (!col) return { error: "Red no válida" };
-  const ya = await env.DB.prepare(`SELECT slug FROM estaciones WHERE upper(${col}) = ?`).bind(codigo).first<{ slug: string }>();
+/** Estaciones de otras redes que puede dar de alta cada usuario (el administrador, sin límite). */
+export const MAX_EXTERNAS_USUARIO = 5;
+
+export interface QuienDaDeAlta {
+  id: number;
+  rol: string;
+}
+
+/**
+ * Añade una estación de otra red (los datos salen de la lista del servidor, no de lo que mande el navegador).
+ * Da igual de qué red se elija: si una de Weather Underground es la misma que una de Meteoclimatic (gemela), se da
+ * de alta como una sola estación: lecturas de Meteoclimatic (no gastan peticiones) e histórico de Weather Underground.
+ */
+export async function anadirExterna(env: Env, quien: QuienDaDeAlta, fuenteElegida: Fuente, codigoElegido: string): Promise<{ slug: string } | { error: string }> {
+  if (!/^[A-Z0-9]{4,25}$/.test(codigoElegido)) return { error: "Código no válido" };
+  if (!COLUMNA[fuenteElegida]) return { error: "Red no válida" };
+  let fuente = fuenteElegida;
+  let codigo = codigoElegido;
+  if (fuente === "wunderground") {
+    const mc = await env.DB.prepare("SELECT mc FROM gemelas WHERE wu = ? AND iguales >= 1 AND iguales > distintos ORDER BY km LIMIT 1").bind(codigo).first<string>("mc");
+    if (mc) {
+      fuente = "meteoclimatic";
+      codigo = mc;
+    }
+  }
+  // ¿Ya está (por esta red o por su gemela en la otra)?
+  const gemela =
+    fuente === "meteoclimatic"
+      ? await env.DB.prepare("SELECT wu FROM gemelas WHERE mc = ? AND iguales >= 1 AND iguales > distintos ORDER BY km LIMIT 1").bind(codigo).first<string>("wu")
+      : null;
+  const ya = await env.DB.prepare(`SELECT slug FROM estaciones WHERE upper(${COLUMNA[fuente]}) = ?1 OR (?2 IS NOT NULL AND upper(wunderground) = ?2)`)
+    .bind(codigo, gemela)
+    .first<{ slug: string }>();
   if (ya) return { error: "Esa estación ya está en Meteostar" };
+  // Límite por usuario
+  if (quien.rol !== "admin") {
+    const suyas = await env.DB.prepare("SELECT count(*) AS n FROM estaciones WHERE tipo = 'externa' AND usuario_id = ?").bind(quien.id).first<number>("n");
+    if ((suyas ?? 0) >= MAX_EXTERNAS_USUARIO) return { error: `Puedes dar de alta como mucho ${MAX_EXTERNAS_USUARIO} estaciones de otras redes. Quita alguna desde tu cuenta para añadir otra.` };
+  }
 
   let datos: { nombre: string; lat: number; lon: number; provincia: string; config: Record<string, string> };
   if (fuente === "meteoclimatic") {
@@ -111,7 +143,7 @@ export async function anadirExterna(env: Env, adminId: number, fuente: Fuente, c
     // La clave general de la web no se guarda en la estación: el conector la toma de la configuración
     datos = { nombre: e.nombre, lat: e.lat, lon: e.lon, provincia: "Teruel", config: { estacion: e.codigo } };
   }
-  const id = await crearEstacion(env.DB, adminId, {
+  const id = await crearEstacion(env.DB, quien.id, {
     tipo: "externa",
     red: fuente === "meteoclimatic" ? "Meteoclimatic" : "Weather Underground",
     nombre: datos.nombre,
@@ -143,13 +175,17 @@ export async function anadirExterna(env: Env, adminId: number, fuente: Fuente, c
   return { slug: f!.slug };
 }
 
-/** Quita una estación externa con sus lecturas (solo las añadidas desde el mapa, nunca las de la red). */
-export async function quitarExterna(db: D1Database, codigo: string): Promise<boolean> {
+/**
+ * Quita una estación externa con sus lecturas (solo las de otras redes, nunca las de la red). La puede quitar quien la
+ * dio de alta o el administrador.
+ */
+export async function quitarExterna(db: D1Database, codigo: string, quien: QuienDaDeAlta): Promise<true | { error: string }> {
   const f = await db
-    .prepare("SELECT id FROM estaciones WHERE tipo = 'externa' AND (upper(meteoclimatic) = ?1 OR upper(wunderground) = ?1)")
+    .prepare("SELECT id, usuario_id FROM estaciones WHERE tipo = 'externa' AND (upper(meteoclimatic) = ?1 OR upper(wunderground) = ?1)")
     .bind(codigo)
-    .first<{ id: number }>();
-  if (!f) return false;
+    .first<{ id: number; usuario_id: number | null }>();
+  if (!f) return { error: "No está en Meteostar" };
+  if (quien.rol !== "admin" && f.usuario_id !== quien.id) return { error: "Solo la puede quitar quien la dio de alta" };
   await db.batch([
     db.prepare("DELETE FROM lecturas WHERE estacion_id = ?").bind(f.id),
     db.prepare("DELETE FROM resumen_diario WHERE estacion_id = ?").bind(f.id),
