@@ -28,6 +28,8 @@ export interface PuntoMapa {
   alPulsar?: () => void;
   /** Más apagado (p. ej. estaciones que no están dadas de alta) */
   atenuado?: boolean;
+  /** Sin dato que enseñar: un punto pequeño, siempre por debajo de los demás y sin etiqueta grande (salvo si es fijo) */
+  discreto?: boolean;
 }
 
 /** Abre el marcador: un enlace, o un botón si el punto tiene «alPulsar». */
@@ -51,7 +53,7 @@ const icono = (p: PuntoMapa, pequeno = false) =>
 /** Solo un punto de color (sin etiqueta); el nombre y el dato salen al pasar el ratón o tocarlo. */
 const iconoPunto = (p: PuntoMapa) =>
   L.divIcon({
-    className: `punto-mapa ${p.atenuado ? "atenuado" : ""}`,
+    className: `punto-mapa ${p.atenuado ? "atenuado" : ""} ${p.discreto ? "discreto" : ""}`,
     html: `${abrir(p, ` aria-label="${escapar(p.nombre)}"`)}<span${p.color ? ` style="background:${escapar(p.color)}"` : ""}></span>${cerrar(p)}`,
     iconSize: [16, 16],
   });
@@ -65,12 +67,13 @@ function PuntosConEtiquetaFija({ puntos, pequeno }: { puntos: PuntoMapa[]; peque
   const [zoom, setZoom] = useState(() => mapa.getZoom());
   useMapEvents({ zoomend: (e) => setZoom(e.target.getZoom()) });
   const todas = zoom >= ZOOM_ETIQUETAS;
-  // Los fijos, al final: se dibujan por encima
-  const orden = [...puntos].sort((a, b) => Number(!!a.fijo) - Number(!!b.fijo));
+  // Los discretos (sin dato), primero: quedan debajo; los fijos, al final: se dibujan por encima
+  const capa = (p: PuntoMapa) => (p.fijo ? 2 : p.discreto ? 0 : 1);
+  const orden = [...puntos].sort((a, b) => capa(a) - capa(b));
   return (
     <>
       {orden.map((p) =>
-        p.fijo || todas ? (
+        p.fijo || (todas && !p.discreto) ? (
           <Marker
             key={p.href}
             position={[p.lat, p.lon]}
@@ -83,7 +86,7 @@ function PuntosConEtiquetaFija({ puntos, pequeno }: { puntos: PuntoMapa[]; peque
             key={p.href}
             position={[p.lat, p.lon]}
             icon={iconoPunto(p)}
-            zIndexOffset={p.atenuado ? -100 : 0}
+            zIndexOffset={p.discreto ? -500 : p.atenuado ? -100 : 0}
             eventHandlers={p.alPulsar ? { click: p.alPulsar } : undefined}
           >
             <Tooltip direction="top" offset={[0, -8]}>

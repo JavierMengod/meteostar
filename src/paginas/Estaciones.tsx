@@ -360,6 +360,8 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
                 href: `${e.fuente}:${e.codigo}`,
                 color: e.fuente === "wunderground" && e.temp === null ? COLOR_AL_PULSAR : colorTemp(e.temp),
                 atenuado: true,
+                // Las de Weather Underground sin dato (hasta que se pulsan): pequeñas y por debajo de las que sí lo tienen
+                discreto: e.temp === null,
                 fijo: e.codigo === elegida,
                 alPulsar: () => elegir(e.codigo),
               })),
