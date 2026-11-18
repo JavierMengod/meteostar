@@ -16,3 +16,10 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>,
 );
+
+// Aplicación instalable: el service worker solo en producción (en desarrollo estorbaría a la recarga en caliente)
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((e) => console.error("service worker", e));
+  });
+}
