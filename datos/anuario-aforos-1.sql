@@ -96211,3 +96211,6 @@ INSERT OR REPLACE INTO aforo_max_mensual (estacion,mes,dia,caudal) VALUES
 ('alfambra-teruel','2022-07',7,4.443),
 ('alfambra-teruel','2022-08',26,6.531),
 ('alfambra-teruel','2022-09',14,12.342);
+UPDATE aforos SET anuario = 1, calculos_hechos = 0 WHERE slug IN ('guadalaviar-tramacastilla', 'turia-teruel', 'alfambra-teruel');
+DELETE FROM aforo_normal WHERE estacion IN ('guadalaviar-tramacastilla', 'turia-teruel', 'alfambra-teruel');
+DELETE FROM aforo_modelo WHERE estacion IN ('guadalaviar-tramacastilla', 'turia-teruel', 'alfambra-teruel');

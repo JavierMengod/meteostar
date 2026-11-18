@@ -1,11 +1,13 @@
 // Histórico de los aforos: Anuario de Aforos (MITECO / CEDEX, validado) y medias diarias de las lecturas en tiempo
-// real que guarda Meteostar. El resumen (lo normal, años, meses, récords y la corrección del modelo de previsión)
-// se calcula una vez al día y se guarda en D1, para que cada visita lea una sola fila.
-import { anioHidrologico, diaHidrologico } from "../shared/hidrologia";
+// real que guarda Meteostar. El resumen (lo normal, años, meses, récords y lo del modelo de previsión) se monta una
+// vez al día y se guarda en D1, para que cada visita lea una sola fila.
+// Para no pasar de los 10 ms de CPU del plan gratuito, las sumas y medias las hace la base de datos, y lo pesado
+// (lo normal de cada día y lo del modelo) se calcula una sola vez, por trozos (calculos-aforos.ts).
+import { diaHidrologico } from "../shared/hidrologia";
 import type { AnioAforo, CrecidaAforo, DiaAforo, ResumenAforo, RespuestaRio } from "../shared/tipos";
 import { type FilaAforo, aforoPorSlug, normalDeHoy } from "./aforos";
 import { fechaLocal } from "./fechas";
-import { calcularCorreccion, celdaDelAforo, climaModeloCompacto, componerPrevision, historicoModelo, pedirReciente } from "./prevision-rio";
+import { celdaDelAforo, componerPrevision, pedirReciente } from "./prevision-rio";
 
 /** Periodo de referencia para «lo normal» (el normal climatológico de la OMM) */
 export const NORMAL_DESDE = 1991;
@@ -17,21 +19,13 @@ type Fila = { fecha: string; caudal: number };
 type Instantaneo = { mes: string; dia: number | null; caudal: number };
 type Ctx = { waitUntil(p: Promise<unknown>): void };
 
-function percentil(ordenados: number[], p: number): number {
-  if (!ordenados.length) return NaN;
-  const i = (ordenados.length - 1) * p;
-  const a = Math.floor(i);
-  const b = Math.ceil(i);
-  return ordenados[a] + (ordenados[b] - ordenados[a]) * (i - a);
-}
-
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
-/** Mayores caudales medios diarios, uno por episodio (separados al menos 10 días). */
-function mayoresCrecidas(filas: Fila[]): CrecidaAforo[] {
+/** Mayores caudales medios diarios, uno por episodio (separados al menos 10 días), a partir de los candidatos ordenados. */
+export function mayoresCrecidas(filas: Fila[]): CrecidaAforo[] {
   const crecidas: CrecidaAforo[] = [];
-  for (const f of [...filas].sort((a, b) => b.caudal - a.caudal)) {
+  for (const f of filas) {
     if (crecidas.length >= 10) break;
     const t = Date.parse(f.fecha);
     if (crecidas.some((c) => Math.abs(Date.parse(c.fecha) - t) < 10 * 86400_000)) continue;
@@ -40,63 +34,10 @@ function mayoresCrecidas(filas: Fila[]): CrecidaAforo[] {
   return crecidas;
 }
 
-const mayoresPuntas = (inst: Instantaneo[]): CrecidaAforo[] =>
+export const mayoresPuntas = (inst: Instantaneo[]): CrecidaAforo[] =>
   [...inst]
-    .sort((a, b) => b.caudal - a.caudal)
     .slice(0, 10)
     .map((i) => ({ fecha: i.dia ? `${i.mes}-${String(i.dia).padStart(2, "0")}` : i.mes, caudal: r3(i.caudal) }));
-
-/** Calcula el resumen de una estación a partir de sus caudales diarios. */
-export function resumir(filas: Fila[], instantaneos: Instantaneo[], reguladoDesde: number | null = null): Omit<ResumenAforo, "estacion" | "correccion" | "climaModelo" | "modeloCalculado"> {
-  // Lo normal para cada día del año hidrológico (ventana de ±7 días para suavizar)
-  const porDia: number[][] = Array.from({ length: 366 }, () => []);
-  const porMes: number[][] = Array.from({ length: 12 }, () => []);
-  for (const f of filas) {
-    const a = Number(f.fecha.slice(0, 4));
-    if (a < NORMAL_DESDE || a > NORMAL_HASTA) continue;
-    const d = diaHidrologico(f.fecha);
-    for (let k = -7; k <= 7; k++) porDia[(d + k + 366) % 366].push(f.caudal);
-    porMes[Number(f.fecha.slice(5, 7)) - 1].push(f.caudal);
-  }
-  const normal = porDia.map((v) => {
-    v.sort((a, b) => a - b);
-    return v.length ? ([0.1, 0.25, 0.5, 0.75, 0.9].map((p) => r3(percentil(v, p))) as [number, number, number, number, number]) : null;
-  });
-  const mesesNormal = porMes.map((v) => (v.length ? r3(v.reduce((a, b) => a + b, 0) / v.length) : null));
-
-  // Años hidrológicos
-  const porAnio = new Map<number, Fila[]>();
-  for (const f of filas) {
-    const a = anioHidrologico(f.fecha);
-    if (!porAnio.has(a)) porAnio.set(a, []);
-    porAnio.get(a)!.push(f);
-  }
-  const anios: AnioAforo[] = [];
-  const disponibles: number[] = [];
-  for (const [anio, dias] of [...porAnio.entries()].sort((a, b) => a[0] - b[0])) {
-    disponibles.push(anio);
-    if (dias.length < DIAS_MINIMOS) continue;
-    const media = dias.reduce((s, d) => s + d.caudal, 0) / dias.length;
-    const max = dias.reduce((m, d) => (d.caudal > m.caudal ? d : m));
-    anios.push({ anio, media: r3(media), volumen: r1((media * 365.25 * 86400) / 1e6), maximo: r3(max.caudal), fechaMaximo: max.fecha, dias: dias.length });
-  }
-
-  const desdeRegulado = reguladoDesde ? `${reguladoDesde}-01-01` : null;
-  return {
-    normal,
-    mesesNormal,
-    periodoNormal: `${NORMAL_DESDE}–${NORMAL_HASTA}`,
-    anios,
-    disponibles,
-    crecidas: mayoresCrecidas(filas),
-    puntas: mayoresPuntas(instantaneos),
-    reguladoDesde,
-    crecidasRegulado: desdeRegulado ? mayoresCrecidas(filas.filter((f) => f.fecha >= desdeRegulado)) : [],
-    puntasRegulado: desdeRegulado ? mayoresPuntas(instantaneos.filter((i) => i.mes >= desdeRegulado.slice(0, 7))) : [],
-    desde: filas[0]?.fecha ?? null,
-    hasta: filas.at(-1)?.fecha ?? null,
-  };
-}
 
 /** Pasa a medias diarias las lecturas en tiempo real de los días ya terminados (sin tocar los del anuario). */
 export async function consolidarLecturas(db: D1Database): Promise<void> {
@@ -116,40 +57,95 @@ export async function consolidarLecturas(db: D1Database): Promise<void> {
   await db.prepare("DELETE FROM aforo_lecturas WHERE t < unixepoch('now', '-400 days')").run();
 }
 
-export async function calcularResumen(db: D1Database, a: FilaAforo): Promise<ResumenAforo> {
-  const filas = (
-    await db.prepare("SELECT fecha, caudal, fuente FROM aforo_diario WHERE estacion = ? AND caudal IS NOT NULL ORDER BY fecha").bind(a.slug).all<Fila & { fuente: string }>()
-  ).results;
-  const inst = (await db.prepare("SELECT mes, dia, caudal FROM aforo_max_mensual WHERE estacion = ?").bind(a.slug).all<Instantaneo>()).results;
-  // Lo del modelo de previsión (corrección con el anuario o, si no hay, lo normal del propio modelo) no cambia:
-  // se reutiliza el del resumen anterior y solo se rehace una vez al mes
-  const previo = await db.prepare("SELECT datos FROM aforo_resumen WHERE estacion = ?").bind(a.slug).first<{ datos: string }>();
-  const anterior: Partial<ResumenAforo> = previo ? JSON.parse(previo.datos) : {};
-  const anuario = filas.filter((f) => f.fuente === "anuario");
-  let correccion = anterior.correccion ?? null;
-  let climaModelo = anterior.climaModelo ?? null;
-  let modeloCalculado = anterior.modeloCalculado ?? null;
-  const caducado = !modeloCalculado || Date.now() / 1000 - modeloCalculado > 30 * 86400 || (!correccion && anuario.length > 1000);
-  if (caducado) {
-    try {
-      const celda = await celdaDelAforo(db, a);
-      const historico = await historicoModelo(celda);
-      correccion = anuario.length > 1000 ? calcularCorreccion(anuario, historico, celda) : null;
-      climaModelo = correccion ? null : climaModeloCompacto(historico, diaHidrologico);
-      modeloCalculado = Math.floor(Date.now() / 1000);
-    } catch (e) {
-      console.error("modelo de previsión", a.slug, e);
-    }
+/** Año hidrológico en SQL: de octubre a septiembre (2021 = de octubre de 2021 a septiembre de 2022). */
+const ANIO_SQL = "CAST(substr(fecha, 1, 4) AS INTEGER) - (substr(fecha, 6, 2) < '10')";
+
+/** Agrupa las filas de lo normal (una por día) en el formato del resumen. */
+export function normalDeFilas(filas: { dia: number; p10: number; p25: number; p50: number; p75: number; p90: number }[]): ResumenAforo["normal"] {
+  const normal: ResumenAforo["normal"] = Array.from({ length: 366 }, () => null);
+  for (const f of filas) normal[f.dia] = [f.p10, f.p25, f.p50, f.p75, f.p90];
+  return normal;
+}
+
+/** Lo del modelo guardado por trozos: la corrección (si están las 4 estaciones) y lo normal del modelo. */
+export function modeloDeFilas(filas: { tipo: string; trozo: number; datos: string | null }[], celda: { lat: number; lon: number } | null): Pick<ResumenAforo, "correccion" | "climaModelo"> {
+  const corr = filas.filter((f) => f.tipo === "correccion").sort((x, y) => x.trozo - y.trozo);
+  const partes = corr.map((f) => (f.datos ? (JSON.parse(f.datos) as { modelo: number[]; aforo: number[] }) : null));
+  const correccion =
+    celda && partes.length === 4 && partes.every((p) => p !== null)
+      ? { modelo: partes.map((p) => p!.modelo), aforo: partes.map((p) => p!.aforo), lat: celda.lat, lon: celda.lon }
+      : null;
+  const clima = filas.filter((f) => f.tipo === "clima" && f.datos);
+  let climaModelo: ResumenAforo["climaModelo"] = null;
+  if (clima.length) {
+    climaModelo = Array.from({ length: 366 }, () => null);
+    for (const f of clima) for (const [dia, n, alto] of JSON.parse(f.datos!) as [number, number, number][]) climaModelo[dia] = [n, alto];
   }
-  const resumen: ResumenAforo = { estacion: a.slug, ...resumir(filas, inst, a.regulado_desde), correccion, climaModelo, modeloCalculado };
-  await db
-    .prepare(
-      "INSERT INTO aforo_resumen (estacion, datos, actualizado) VALUES (?, ?, unixepoch()) ON CONFLICT (estacion) DO UPDATE SET datos = excluded.datos, actualizado = excluded.actualizado",
-    )
-    .bind(a.slug, JSON.stringify(resumen))
-    .run();
-  const hoy = normalDeHoy(resumen);
-  await db.prepare("UPDATE aforos SET normal_hoy = ? WHERE slug = ?").bind(hoy ? JSON.stringify(hoy) : null, a.slug).run();
+  return { correccion, climaModelo };
+}
+
+/**
+ * Monta el resumen de un aforo. Las sumas, medias y máximos los calcula la base de datos; lo normal y lo del modelo
+ * ya están calculados por trozos. Así el Worker apenas usa CPU.
+ */
+export async function calcularResumen(db: D1Database, a: FilaAforo): Promise<ResumenAforo> {
+  const desdeRegulado = a.regulado_desde ? `${a.regulado_desde}-01-01` : null;
+  const [normal, meses, anios, crecidas, crecidasReg, puntas, puntasReg, extremos, modelo] = await db.batch([
+    db.prepare("SELECT dia, p10, p25, p50, p75, p90 FROM aforo_normal WHERE estacion = ?").bind(a.slug),
+    db
+      .prepare(
+        `SELECT CAST(substr(fecha, 6, 2) AS INTEGER) AS mes, AVG(caudal) AS media FROM aforo_diario
+         WHERE estacion = ? AND fecha BETWEEN ? AND ? AND caudal IS NOT NULL GROUP BY mes`,
+      )
+      .bind(a.slug, `${NORMAL_DESDE}-01-01`, `${NORMAL_HASTA}-12-31`),
+    // En SQLite, con MAX(), las demás columnas son las de la fila del máximo: así sale su fecha
+    db
+      .prepare(
+        `SELECT ${ANIO_SQL} AS anio, COUNT(*) AS dias, AVG(caudal) AS media, MAX(caudal) AS maximo, fecha AS fechaMaximo
+         FROM aforo_diario WHERE estacion = ? AND caudal IS NOT NULL GROUP BY anio ORDER BY anio`,
+      )
+      .bind(a.slug),
+    db.prepare("SELECT fecha, caudal FROM aforo_diario WHERE estacion = ? AND caudal IS NOT NULL ORDER BY caudal DESC LIMIT 400").bind(a.slug),
+    db
+      .prepare("SELECT fecha, caudal FROM aforo_diario WHERE estacion = ? AND fecha >= ? AND caudal IS NOT NULL ORDER BY caudal DESC LIMIT 400")
+      .bind(a.slug, desdeRegulado ?? "9999"),
+    db.prepare("SELECT mes, dia, caudal FROM aforo_max_mensual WHERE estacion = ? ORDER BY caudal DESC LIMIT 10").bind(a.slug),
+    db.prepare("SELECT mes, dia, caudal FROM aforo_max_mensual WHERE estacion = ? AND mes >= ? ORDER BY caudal DESC LIMIT 10").bind(a.slug, desdeRegulado?.slice(0, 7) ?? "9999"),
+    db.prepare("SELECT MIN(fecha) AS desde, MAX(fecha) AS hasta FROM aforo_diario WHERE estacion = ? AND caudal IS NOT NULL").bind(a.slug),
+    db.prepare("SELECT tipo, trozo, datos FROM aforo_modelo WHERE estacion = ?").bind(a.slug),
+  ]);
+  const mesesNormal: (number | null)[] = Array.from({ length: 12 }, () => null);
+  for (const m of meses.results as { mes: number; media: number }[]) mesesNormal[m.mes - 1] = r3(m.media);
+  const filasAnios = anios.results as { anio: number; dias: number; media: number; maximo: number; fechaMaximo: string }[];
+  const ext = extremos.results[0] as { desde: string | null; hasta: string | null } | undefined;
+  const celda = a.celda_lat !== null && a.celda_lon !== null ? { lat: a.celda_lat, lon: a.celda_lon } : null;
+  const resumen: ResumenAforo = {
+    estacion: a.slug,
+    normal: normalDeFilas(normal.results as any),
+    mesesNormal,
+    periodoNormal: `${NORMAL_DESDE}–${NORMAL_HASTA}`,
+    anios: filasAnios
+      .filter((x) => x.dias >= DIAS_MINIMOS)
+      .map((x): AnioAforo => ({ anio: x.anio, media: r3(x.media), volumen: r1((x.media * 365.25 * 86400) / 1e6), maximo: r3(x.maximo), fechaMaximo: x.fechaMaximo, dias: x.dias })),
+    disponibles: filasAnios.map((x) => x.anio),
+    crecidas: mayoresCrecidas(crecidas.results as Fila[]),
+    puntas: mayoresPuntas(puntas.results as Instantaneo[]),
+    reguladoDesde: a.regulado_desde,
+    crecidasRegulado: desdeRegulado ? mayoresCrecidas(crecidasReg.results as Fila[]) : [],
+    puntasRegulado: desdeRegulado ? mayoresPuntas(puntasReg.results as Instantaneo[]) : [],
+    ...modeloDeFilas(modelo.results as any, celda),
+    modeloCalculado: null,
+    desde: ext?.desde ?? null,
+    hasta: ext?.hasta ?? null,
+  };
+  await db.batch([
+    db
+      .prepare(
+        "INSERT INTO aforo_resumen (estacion, datos, actualizado) VALUES (?, ?, unixepoch()) ON CONFLICT (estacion) DO UPDATE SET datos = excluded.datos, actualizado = excluded.actualizado",
+      )
+      .bind(a.slug, JSON.stringify(resumen)),
+    db.prepare("UPDATE aforos SET normal_hoy = ? WHERE slug = ?").bind(JSON.stringify(normalDeHoy(resumen)) ?? null, a.slug),
+  ]);
   return resumen;
 }
 
@@ -190,12 +186,7 @@ export async function resumenAforo(env: Env, slug: string): Promise<ResumenAforo
     await consolidarLecturas(env.DB);
     return calcularResumen(env.DB, a);
   }
-  const r: ResumenAforo = JSON.parse(fila.datos);
-  // Si se acaba de cargar el anuario de este río, el resumen se rehace ya, sin esperar a la tarea diaria
-  if (!r.anios.length && (await env.DB.prepare("SELECT 1 FROM aforo_diario WHERE estacion = ? AND fuente = 'anuario' LIMIT 1").bind(slug).first())) {
-    return calcularResumen(env.DB, a);
-  }
-  return r;
+  return JSON.parse(fila.datos);
 }
 
 /** Caudal de cada día de un año hidrológico. */

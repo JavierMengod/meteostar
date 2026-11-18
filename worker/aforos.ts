@@ -70,6 +70,10 @@ export interface FilaAforo {
   mini: string | null;
   normal_hoy: string | null;
   leido: number | null;
+  /** 1 si tiene histórico del Anuario de Aforos */
+  anuario: number;
+  /** Trozos de cálculo hechos (ver calculos-aforos.ts) */
+  calculos_hechos: number;
 }
 
 export async function aforosConfigurados(db: D1Database): Promise<FilaAforo[]> {
@@ -413,5 +417,7 @@ export async function quitarAforo(db: D1Database, slug: string): Promise<void> {
     db.prepare("DELETE FROM aforo_max_mensual WHERE estacion = ?").bind(slug),
     db.prepare("DELETE FROM aforo_resumen WHERE estacion = ?").bind(slug),
     db.prepare("DELETE FROM favoritos WHERE tipo = 'rio' AND slug = ?").bind(slug),
+    db.prepare("DELETE FROM aforo_normal WHERE estacion = ?").bind(slug),
+    db.prepare("DELETE FROM aforo_modelo WHERE estacion = ?").bind(slug),
   ]);
 }

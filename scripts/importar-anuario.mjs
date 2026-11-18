@@ -5,7 +5,7 @@
 //   El anuario se descarga de https://www.miteco.gob.es/es/agua/temas/evaluacion-de-los-recursos-hidricos/sistema-informacion-anuario-aforos.html
 //   (base de datos en CSV); cada cuenca va en su carpeta (JUCAR, EBRO…).
 // Después: npx wrangler d1 execute meteostar --file datos/anuario-aforos.sql [--local | --remote]
-// Al día siguiente (o al abrir el histórico del río) se recalculan solos lo normal, los récords y la corrección de la previsión.
+// Después, la tarea de los aforos recalcula sola, por trozos, lo normal, los récords y la corrección de la previsión.
 // Fuente: «© Ministerio para la Transición Ecológica y el Reto Demográfico». Anuario de Aforos 2021-22.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -67,4 +67,9 @@ for (const f of filas("afliqi.csv")) {
 console.log("-- Anuario de Aforos 2021-22 (MITECO / CEDEX). Generado por scripts/importar-anuario.mjs");
 console.log(insertar("aforo_diario", ["estacion", "fecha", "caudal", "nivel", "fuente"], diarios));
 console.log(insertar("aforo_max_mensual", ["estacion", "mes", "dia", "caudal"], instantaneos));
+// Marca los ríos como «con histórico» y pone sus cálculos a cero: la tarea de los aforos los rehace por trozos
+const lista = Object.values(ESTACIONES).map((x) => sql(x)).join(", ");
+console.log(`UPDATE aforos SET anuario = 1, calculos_hechos = 0 WHERE slug IN (${lista});`);
+console.log(`DELETE FROM aforo_normal WHERE estacion IN (${lista});`);
+console.log(`DELETE FROM aforo_modelo WHERE estacion IN (${lista});`);
 console.error(`${diarios.length} días y ${instantaneos.length} máximos mensuales`);

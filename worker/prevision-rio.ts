@@ -16,8 +16,6 @@ const HIST_HASTA = "2019-12-31";
 const UN_MES = 30 * 86400;
 const DIAS_PASADOS = 20;
 const DIAS_PREVISION = 15;
-/** Cuantiles que se guardan para la corrección (0 %, 5 %… 100 %) */
-const CUANTILES = Array.from({ length: 21 }, (_, i) => i / 20);
 
 type Ctx = { waitUntil(p: Promise<unknown>): void };
 
@@ -36,13 +34,6 @@ async function pedir(url: string, segundos: number, ctx?: Ctx): Promise<any> {
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const r2 = (v: number) => Math.round(v * 100) / 100;
-
-function percentil(ordenados: number[], p: number): number {
-  const i = (ordenados.length - 1) * p;
-  const a = Math.floor(i);
-  const b = Math.ceil(i);
-  return ordenados[a] + (ordenados[b] - ordenados[a]) * (i - a);
-}
 
 /** Estación del año de una fecha: 0 = dic-feb, 1 = mar-may, 2 = jun-ago, 3 = sep-nov. */
 export const estacionDelAnio = (fecha: string) => Math.floor((Number(fecha.slice(5, 7)) % 12) / 3);
@@ -82,25 +73,6 @@ export async function historicoModelo(celda: { lat: number; lon: number }): Prom
   return m;
 }
 
-/** Cuantiles del modelo y del aforo en los días en que hay de los dos (al menos 3 años en cada estación del año). */
-export function calcularCorreccion(aforo: { fecha: string; caudal: number }[], modelo: Map<string, number>, celda: { lat: number; lon: number }): CorreccionModelo | null {
-  const m: number[][] = [[], [], [], []];
-  const a: number[][] = [[], [], [], []];
-  for (const f of aforo) {
-    const v = modelo.get(f.fecha);
-    if (v === undefined) continue;
-    const e = estacionDelAnio(f.fecha);
-    m[e].push(v);
-    a[e].push(f.caudal);
-  }
-  if (m.some((x) => x.length < 270)) return null;
-  const cuantiles = (x: number[]) => {
-    x.sort((p, q) => p - q);
-    return CUANTILES.map((p) => Math.round(percentil(x, p) * 1000) / 1000);
-  };
-  return { modelo: m.map(cuantiles), aforo: a.map(cuantiles), lat: celda.lat, lon: celda.lon };
-}
-
 /** Pasa un valor del modelo a la escala del aforo con los cuantiles de su estación del año. */
 export function corregir(v: number, qm: number[], qa: number[]): number {
   if (v <= qm[0]) return qm[0] > 0 ? (qa[0] * v) / qm[0] : qa[0];
@@ -114,36 +86,6 @@ export function corregir(v: number, qm: number[], qa: number[]): number {
     }
   }
   return v;
-}
-
-/** Lo normal (p50) y lo habitualmente alto (p90) del modelo para cada día del año, si no hay histórico del aforo. */
-export function climatologiaModelo(historico: Map<string, number>): Map<string, { normal: number; alto: number }> {
-  const porDia = new Map<string, number[]>();
-  for (const [f, v] of historico) {
-    const md = f.slice(5);
-    if (!porDia.has(md)) porDia.set(md, []);
-    porDia.get(md)!.push(v);
-  }
-  const res = new Map<string, { normal: number; alto: number }>();
-  for (const [md, v] of porDia) {
-    v.sort((a, b) => a - b);
-    res.set(md, { normal: r2(percentil(v, 0.5)), alto: r2(percentil(v, 0.9)) });
-  }
-  return res;
-}
-
-/** Lo normal del modelo por día del año hidrológico (0 = 1 de octubre), para guardarlo en el resumen. */
-export function climaModeloCompacto(historico: Map<string, number>, diaHidrologico: (f: string) => number): ([number, number] | null)[] {
-  const porDia: number[][] = Array.from({ length: 366 }, () => []);
-  for (const [f, v] of historico) {
-    const d = diaHidrologico(f);
-    for (let k = -7; k <= 7; k++) porDia[(d + k + 366) % 366].push(v);
-  }
-  return porDia.map((v) => {
-    if (!v.length) return null;
-    v.sort((a, b) => a - b);
-    return [r2(percentil(v, 0.5)), r2(percentil(v, 0.9))];
-  });
 }
 
 /** Aviso: la previsión central supera lo habitualmente alto → probable; solo 1 de cada 4 escenarios (percentil 75) → posible. */

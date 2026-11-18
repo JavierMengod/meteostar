@@ -6429,3 +6429,6 @@ INSERT OR REPLACE INTO aforo_max_mensual (estacion,mes,dia,caudal) VALUES
 ('turia-torrealta','2022-07',6,7.887),
 ('turia-torrealta','2022-08',26,6.672),
 ('turia-torrealta','2022-09',14,17.501);
+UPDATE aforos SET anuario = 1, calculos_hechos = 0 WHERE slug IN ('turia-torrealta');
+DELETE FROM aforo_normal WHERE estacion IN ('turia-torrealta');
+DELETE FROM aforo_modelo WHERE estacion IN ('turia-torrealta');

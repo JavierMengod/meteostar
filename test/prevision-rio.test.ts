@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { avisoPrevision, calcularCorreccion, componerPrevision, corregir, estacionDelAnio } from "../worker/prevision-rio";
+import { avisoPrevision, componerPrevision, corregir, estacionDelAnio } from "../worker/prevision-rio";
+import { cuantilesCorreccion } from "../worker/calculos-aforos";
 import { type FilaAforo, miniSerie, tarjeta } from "../worker/aforos";
 import { estadoDatos, mensajePrevision, situacionAforo } from "../shared/rios";
 import type { DiaRio } from "../shared/tipos";
@@ -23,19 +24,19 @@ describe("corrección del modelo", () => {
     expect(corregir(10, [0, 1, 2, 4], [0, 2, 4, 8])).toBe(14);
   });
 
-  it("calcula los cuantiles solo si hay años suficientes en cada estación", () => {
+  it("calcula los cuantiles de una estación del año solo si hay días suficientes", () => {
     const aforo: { fecha: string; caudal: number }[] = [];
     const modelo = new Map<string, number>();
-    for (let t = Date.UTC(2000, 0, 1); t < Date.UTC(2004, 0, 1); t += 86400_000) {
+    for (let t = Date.UTC(2000, 0, 1); t < Date.UTC(2001, 0, 1); t += 86400_000) {
       const fecha = new Date(t).toISOString().slice(0, 10);
       aforo.push({ fecha, caudal: 1 });
       modelo.set(fecha, 4);
     }
-    const c = calcularCorreccion(aforo, modelo, { lat: 40, lon: -1 })!;
-    expect(c.modelo).toHaveLength(4);
-    expect(c.modelo[0][10]).toBe(4);
-    expect(c.aforo[0][10]).toBe(1);
-    expect(calcularCorreccion(aforo.slice(0, 200), modelo, { lat: 40, lon: -1 })).toBeNull();
+    const c = cuantilesCorreccion(aforo, modelo)!;
+    expect(c.modelo).toHaveLength(21);
+    expect(c.modelo[10]).toBe(4);
+    expect(c.aforo[10]).toBe(1);
+    expect(cuantilesCorreccion(aforo.slice(0, 200), modelo)).toBeNull();
   });
 });
 
@@ -114,7 +115,7 @@ describe("portada de ríos", () => {
       slug: "turia-teruel", nombre: "Turia en Teruel", rio: "Turia", codigo: "08015", elemento: "x", confederacion: "Júcar",
       lat: 40.3, lon: -1.1, embalse: null, regulado_desde: null, umbrales: "[20,40,50]", celda_lat: null, celda_lon: null,
       orden: 1, destacado: 1, ultimo_t: 100, ultimo_caudal: 0.96, ultimo_nivel: 0.4, tendencia: -0.03,
-      mini: "[[0,1],[100,0.96]]", normal_hoy: "[0.6,0.9,1.2,1.5,2.5]", leido: 100,
+      mini: "[[0,1],[100,0.96]]", normal_hoy: "[0.6,0.9,1.2,1.5,2.5]", leido: 100, anuario: 0, calculos_hechos: 0,
     } satisfies FilaAforo;
     const t = tarjeta(fila);
     expect(t.ultimo).toEqual({ t: 100, caudal: 0.96, nivel: 0.4 });

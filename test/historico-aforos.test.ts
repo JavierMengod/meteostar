@@ -1,16 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { anioHidrologico, comparaNormal, diaHidrologico, nombreAnioHidrologico } from "../shared/hidrologia";
-import { resumir } from "../worker/historico-aforos";
+import { mayoresCrecidas, mayoresPuntas, modeloDeFilas, normalDeFilas } from "../worker/historico-aforos";
 
-/** Días de un año hidrológico con caudal constante, salvo una crecida. */
-function anio(a: number, caudal: number, crecida?: [string, number]) {
-  const filas: { fecha: string; caudal: number }[] = [];
-  for (let t = Date.UTC(a, 9, 1); t < Date.UTC(a + 1, 9, 1); t += 86400_000) {
-    const fecha = new Date(t).toISOString().slice(0, 10);
-    filas.push({ fecha, caudal: crecida && crecida[0] === fecha ? crecida[1] : caudal });
-  }
-  return filas;
-}
 
 describe("año hidrológico", () => {
   it("empieza el 1 de octubre", () => {
@@ -38,31 +29,51 @@ describe("año hidrológico", () => {
 });
 
 describe("resumen del histórico", () => {
-  const filas = [...anio(1995, 1), ...anio(1996, 2, ["1996-12-10", 50]), ...anio(1997, 3, ["1998-03-01", 80])];
-  const r = resumir(filas, [
-    { mes: "1996-12", dia: 10, caudal: 120 },
-    { mes: "1998-03", dia: null, caudal: 95 },
-  ]);
-
-  it("calcula los años completos con su agua y su crecida", () => {
-    expect(r.anios.map((a) => a.anio)).toEqual([1995, 1996, 1997]);
-    expect(r.anios[0]).toMatchObject({ media: 1, volumen: 31.6, maximo: 1, dias: 366 }); // incluye el 29 de febrero de 1996
-    expect(r.anios[1]).toMatchObject({ maximo: 50, fechaMaximo: "1996-12-10" });
-    expect(r.disponibles).toEqual([1995, 1996, 1997]);
+  it("deja una crecida por episodio a partir de los candidatos ordenados", () => {
+    const candidatos = [
+      { fecha: "1998-03-01", caudal: 80 },
+      { fecha: "1998-03-02", caudal: 75 },
+      { fecha: "1996-12-10", caudal: 50 },
+      { fecha: "1996-12-15", caudal: 49 },
+      { fecha: "2001-05-01", caudal: 20 },
+    ];
+    expect(mayoresCrecidas(candidatos)).toEqual([
+      { fecha: "1998-03-01", caudal: 80 },
+      { fecha: "1996-12-10", caudal: 50 },
+      { fecha: "2001-05-01", caudal: 20 },
+    ]);
   });
 
-  it("ordena las crecidas y las puntas", () => {
-    expect(r.crecidas[0]).toEqual({ fecha: "1998-03-01", caudal: 80 });
-    expect(r.crecidas[1]).toEqual({ fecha: "1996-12-10", caudal: 50 });
-    expect(r.puntas).toEqual([
+  it("pone fecha completa a las puntas con día y solo el mes a las que no", () => {
+    expect(
+      mayoresPuntas([
+        { mes: "1996-12", dia: 10, caudal: 120 },
+        { mes: "1998-03", dia: null, caudal: 95 },
+      ]),
+    ).toEqual([
       { fecha: "1996-12-10", caudal: 120 },
       { fecha: "1998-03", caudal: 95 },
     ]);
   });
 
-  it("calcula lo normal de cada día del periodo de referencia", () => {
-    expect(r.normal[100]?.[2]).toBe(2);
-    expect(r.mesesNormal[6]).toBe(2);
-    expect(r.periodoNormal).toBe("1991–2020");
+  it("coloca lo normal de cada día en su sitio del año hidrológico", () => {
+    const n = normalDeFilas([{ dia: 46, p10: 1, p25: 2, p50: 3, p75: 4, p90: 5 }]);
+    expect(n).toHaveLength(366);
+    expect(n[46]).toEqual([1, 2, 3, 4, 5]);
+    expect(n[0]).toBeNull();
+  });
+
+  it("solo da la corrección del modelo si están las cuatro estaciones del año", () => {
+    const parte = JSON.stringify({ modelo: [0, 1], aforo: [0, 2] });
+    const cuatro = [0, 1, 2, 3].map((trozo) => ({ tipo: "correccion", trozo, datos: parte }));
+    expect(modeloDeFilas(cuatro, { lat: 40, lon: -1 }).correccion).toEqual({ modelo: [[0, 1], [0, 1], [0, 1], [0, 1]], aforo: [[0, 2], [0, 2], [0, 2], [0, 2]], lat: 40, lon: -1 });
+    expect(modeloDeFilas(cuatro.slice(0, 3), { lat: 40, lon: -1 }).correccion).toBeNull();
+    expect(modeloDeFilas([...cuatro.slice(0, 3), { tipo: "correccion", trozo: 3, datos: null }], { lat: 40, lon: -1 }).correccion).toBeNull();
+  });
+
+  it("monta lo normal del modelo a partir de sus trozos", () => {
+    const c = modeloDeFilas([{ tipo: "clima", trozo: 1, datos: JSON.stringify([[31, 1.5, 4]]) }], null).climaModelo!;
+    expect(c[31]).toEqual([1.5, 4]);
+    expect(c[0]).toBeNull();
   });
 });

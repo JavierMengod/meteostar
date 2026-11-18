@@ -90089,3 +90089,6 @@ INSERT OR REPLACE INTO aforo_max_mensual (estacion,mes,dia,caudal) VALUES
 ('guadalaviar-gea','2022-07',6,1.471),
 ('guadalaviar-gea','2022-08',27,1.455),
 ('guadalaviar-gea','2022-09',21,2.17);
+UPDATE aforos SET anuario = 1, calculos_hechos = 0 WHERE slug IN ('alfambra-villalba-alta', 'mijares-el-terde', 'guadalaviar-salida-arquillo', 'guadalaviar-gea');
+DELETE FROM aforo_normal WHERE estacion IN ('alfambra-villalba-alta', 'mijares-el-terde', 'guadalaviar-salida-arquillo', 'guadalaviar-gea');
+DELETE FROM aforo_modelo WHERE estacion IN ('alfambra-villalba-alta', 'mijares-el-terde', 'guadalaviar-salida-arquillo', 'guadalaviar-gea');

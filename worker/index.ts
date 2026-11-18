@@ -5,6 +5,7 @@ import publica from "./api/publica";
 import { leerEstaciones } from "./cron";
 import { borrarAntiguas } from "./db";
 import { actualizarAforos } from "./aforos";
+import { avanzarCalculos } from "./calculos-aforos";
 import { actualizarHistorico, refrescarResumenes } from "./historico-aforos";
 import { archivarRadar } from "./radar";
 import { actualizarSatelite } from "./seguimiento";
@@ -30,9 +31,12 @@ export default {
     }
     // Cada 2 minutos: lecturas de los aforos de río, por tandas (en su propia invocación, con su propio cupo de peticiones)
     if (controller.cron === "1-59/2 * * * *") {
+      // Después, un trozo de los cálculos del histórico y un resumen: así ninguna pasada pasa de los límites del plan
+      // gratuito (10 ms de CPU y 50 consultas a D1 por ejecución)
       ctx.waitUntil(
         actualizarAforos(env)
-          .then(() => refrescarResumenes(env, 2))
+          .then(() => avanzarCalculos(env, 1))
+          .then(() => refrescarResumenes(env, 1))
           .catch((e) => console.error("aforos", e)),
       );
       return;
