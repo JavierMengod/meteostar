@@ -113,11 +113,11 @@ function GraficaAnios({ resumen, a, b, onElegir }: { resumen: ResumenAforo; a: n
         <YAxis width={44} tick={{ className: "eje" }} stroke="var(--borde)" />
         <Tooltip
           labelFormatter={(x) => `Año hidrológico ${nombreAnioHidrologico(Number(x))}`}
-          formatter={(v) => [v === null || v === undefined ? "Sin datos" : `${n(v as number, 0)} hm³`, "Agua que pasó"]}
+          formatter={(v) => [v === null || v === undefined ? "Sin datos" : `${n(v as number, decimalesHm3(v as number))} hm³`, "Agua que pasó"]}
           contentStyle={tooltipEstilo}
           cursor={{ fill: "var(--rejilla)" }}
         />
-        {media !== null && <ReferenceLine y={media} stroke="var(--texto-suave)" strokeDasharray="4 4" label={{ value: `Normal ${n(media, 0)} hm³`, fontSize: 11, position: "insideTopRight" }} />}
+        {media !== null && <ReferenceLine y={media} stroke="var(--texto-suave)" strokeDasharray="4 4" label={{ value: `Normal ${n(media, decimalesHm3(media))} hm³`, fontSize: 11, position: "insideTopRight" }} />}
         <Bar dataKey="volumen" isAnimationActive={false} onClick={(d: any) => d?.anio && onElegir(d.anio)} style={{ cursor: "pointer" }}>
           {datos.map((x) => (
             <Cell key={x.anio} fill={x.anio === a ? COLOR_A : x.anio === b ? COLOR_B : "var(--borde)"} />
@@ -162,6 +162,9 @@ function GraficaMeses({ resumen, a, b, diasA, diasB }: { resumen: ResumenAforo; 
     </ResponsiveContainer>
   );
 }
+
+/** Decimales de un volumen: los ríos pequeños mueven menos de 1 hm³ al año. */
+const decimalesHm3 = (v: number) => (v < 1 ? 2 : v < 10 ? 1 : 0);
 
 function Records({ titulo, lista, nota }: { titulo: string; lista: { fecha: string; caudal: number }[]; nota: string }) {
   return (
