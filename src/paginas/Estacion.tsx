@@ -287,6 +287,21 @@ export default function Estacion({ slug, prevision }: Props) {
                 <p className="suave">—</p>
               )}
             </section>
+            {a.rayos != null && (
+              <section className="tarjeta tarjeta-rayos">
+                <h3>Rayos</h3>
+                <p className="numero-medio">
+                  {a.rayos}
+                  <sup>{a.rayos === 1 ? "rayo hoy" : "rayos hoy"}</sup>
+                </p>
+                <p className="suave">
+                  {a.rayos_dist != null && a.rayos_ts
+                    ? `El último, a ${n(a.rayos_dist, 0)} km, ${e.ahora - a.rayos_ts < 86400 ? `a las ${hora(a.rayos_ts)}` : `el ${fechaCorta(fechaDe(a.rayos_ts), true)}`}`
+                    : "Sin rayos registrados"}
+                  {" · "}detector de la estación (alcance de unos 40 km)
+                </p>
+              </section>
+            )}
             <section className="tarjeta">
               <h3>Estado de la estación</h3>
               <p className="numero-medio">

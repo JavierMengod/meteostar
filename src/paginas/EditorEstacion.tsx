@@ -132,6 +132,44 @@ export default function EditorEstacion({ id }: { id: string }) {
     );
   };
 
+  // Importación del histórico de ecowitt.net, por tramos de unos días
+  const [importacion, setImportacion] = useState<{ ok: boolean; texto: string; enCurso: boolean } | null>(null);
+  const importar = async () => {
+    if (!(await guardar())) return;
+    type Tramo = { desde: string; hechos: { fecha: string; lecturas: number }[]; siguiente: string | null; ultimo: string; error?: string };
+    // undefined: aún no ha empezado (el servidor elige el primer día); null: terminado
+    let desde: string | null | undefined;
+    let dias = 0;
+    let lecturas = 0;
+    let inicio = "";
+    setImportacion({ ok: true, texto: "Preguntando a ecowitt.net desde cuándo tiene datos…", enCurso: true });
+    try {
+      let pausas = 0;
+      do {
+        let r: Tramo;
+        try {
+          r = await enviar<Tramo>(`/api/cuenta/estaciones/${id}/importar`, "POST", desde ? { desde } : {});
+        } catch (e) {
+          // ecowitt.net limita las peticiones por minuto: se espera y se sigue donde iba
+          if (!/upper limit|limit/i.test(String(e instanceof Error ? e.message : e)) || ++pausas > 30) throw e;
+          setImportacion({ ok: true, texto: `ecowitt.net pide una pausa: se sigue en un minuto (${dias} días importados)…`, enCurso: true });
+          await new Promise((res) => setTimeout(res, 65_000));
+          continue;
+        }
+        inicio ||= r.desde;
+        dias += r.hechos.length;
+        lecturas += r.hechos.reduce((s, h) => s + h.lecturas, 0);
+        const total = Math.round((Date.parse(r.ultimo) - Date.parse(inicio)) / 86400_000) + 1;
+        setImportacion({ ok: true, texto: `Importando… ${dias} de ${total} días (hasta el ${r.hechos.at(-1)?.fecha ?? r.desde})`, enCurso: true });
+        desde = r.siguiente;
+      } while (desde !== null);
+      setImportacion({ ok: true, texto: `Hecho: ${dias} días desde el ${inicio} (${lecturas.toLocaleString("es-ES")} datos de ecowitt.net).`, enCurso: false });
+    } catch (e) {
+      setImportacion({ ok: false, texto: `Se ha parado: ${e instanceof Error ? e.message : String(e)}. Puedes volver a pulsar para seguir.`, enCurso: false });
+    }
+  };
+  const leeEcowitt = f.fuente === "ecowitt_api" || f.fuente === "directo";
+
   const nuevaClave = async () => {
     if (!confirm("La clave actual dejará de funcionar y tendrás que cambiarla en la consola. ¿Seguro?")) return;
     const r = await enviar<EstacionPropia>(`/api/cuenta/estaciones/${id}/token`, "POST");
@@ -251,9 +289,14 @@ export default function EditorEstacion({ id }: { id: string }) {
         <button className="boton-principal" onClick={guardar} disabled={ocupado}>
           {ocupado ? "Guardando…" : nueva ? "Crear estación" : "Guardar cambios"}
         </button>
-        {!nueva && con?.modo === "consulta" && (
+        {!nueva && (con?.modo === "consulta" || f.fuente === "directo") && (
           <button className="boton-secundario" onClick={probar}>
             Guardar y probar
+          </button>
+        )}
+        {!nueva && leeEcowitt && (
+          <button className="boton-secundario" onClick={importar} disabled={importacion?.enCurso}>
+            Importar histórico de ecowitt.net
           </button>
         )}
         {!nueva && (
@@ -262,6 +305,7 @@ export default function EditorEstacion({ id }: { id: string }) {
           </button>
         )}
         {prueba && <span className={prueba.ok ? "ok-form" : "error-form"}>{prueba.texto}</span>}
+        {importacion && <span className={importacion.ok ? "ok-form" : "error-form"}>{importacion.texto}</span>}
       </div>
     </>
   );

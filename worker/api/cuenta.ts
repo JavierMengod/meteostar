@@ -32,6 +32,7 @@ import {
 } from "../estaciones";
 import { ahora } from "./publica";
 import { anadirExterna, catalogoExternas, quitarExterna } from "../externas";
+import { importarTramo, primerDiaEcowitt } from "../importar-ecowitt";
 import { PROVINCIAS_MC } from "../meteoclimatic";
 
 type Entorno = { Bindings: Env; Variables: { usuario: Usuario } };
@@ -295,6 +296,22 @@ app.post("/cuenta/estaciones/:id/probar", async (c) => {
     const error = (e instanceof Error ? e.message : String(e)).slice(0, 300);
     await c.env.DB.prepare("UPDATE estaciones SET ultima_consulta = ?, ultimo_error = ? WHERE id = ?").bind(t, error, f.id).run();
     return c.json({ ok: false, error });
+  }
+});
+
+/**
+ * Importa el histórico de ecowitt.net, por tramos de unos días (la página va llamando hasta acabar).
+ * Sin «desde», empieza el día en que la estación se dio de alta en ecowitt.net.
+ */
+app.post("/cuenta/estaciones/:id/importar", async (c) => {
+  const f = await estacionEditable(c, Number(c.req.param("id")));
+  if (!f) return c.json({ error: "Estación no encontrada" }, 404);
+  const b = await cuerpo(c);
+  try {
+    const desde = typeof b?.desde === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.desde) ? b.desde : await primerDiaEcowitt(c.env, f);
+    return c.json({ desde, ...(await importarTramo(c.env, f, desde, ahora())) });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
   }
 });
 

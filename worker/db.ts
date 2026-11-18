@@ -5,7 +5,7 @@ import { fechaLocal } from "./fechas";
 
 const COLUMNAS = [
   "ts", "fuente", "temp", "hum", "rocio", "sensacion", "presion", "presion_abs", "viento", "racha",
-  "dir", "lluvia_dia", "intensidad", "radiacion", "uv", "temp_int", "hum_int",
+  "dir", "lluvia_dia", "intensidad", "radiacion", "uv", "temp_int", "hum_int", "rayos", "rayos_dist", "rayos_ts",
 ] as const satisfies readonly (keyof Lectura)[];
 
 /** Días que se conservan las lecturas al minuto. */
@@ -20,7 +20,8 @@ export async function guardarLectura(db: D1Database, estacionId: number, l: Lect
   const directa = l.fuente === "directo" || l.fuente === "push";
   const verbo = directa ? "INSERT OR REPLACE" : "INSERT OR IGNORE";
   const sql = `${verbo} INTO lecturas (estacion_id, ${COLUMNAS.join(", ")}) VALUES (?, ${COLUMNAS.map(() => "?").join(", ")})`;
-  const r = await db.prepare(sql).bind(estacionId, ...COLUMNAS.map((c) => l[c])).run();
+  // Los campos que una fuente no da (p. ej. los rayos) van como NULL
+  const r = await db.prepare(sql).bind(estacionId, ...COLUMNAS.map((c) => l[c] ?? null)).run();
   if (!r.meta.changes) return false;
   await actualizarResumen(db, estacionId, l);
   return true;
@@ -40,6 +41,7 @@ const CAMPOS_RESUMEN: [keyof ResumenDiario, keyof Lectura, "max" | "min", boolea
   ["intensidad_max", "intensidad", "max", true],
   ["radiacion_max", "radiacion", "max", false],
   ["uv_max", "uv", "max", false],
+  ["rayos", "rayos", "max", false],
 ];
 
 /** INSERT … ON CONFLICT que solo mejora los extremos (más alto en los máximos, más bajo en los mínimos). */
@@ -74,6 +76,48 @@ async function actualizarResumen(db: D1Database, estacionId: number, l: Lectura)
     .prepare(SQL_RESUMEN)
     .bind(...valoresResumen(estacionId, fechaLocal(l.ts), 1, (campo) => l[campo] as number | null, l.ts))
     .run();
+}
+
+/**
+ * Mezcla en el resumen de un día los extremos de muchas lecturas a la vez (importación de históricos): una sola
+ * consulta por día, con la hora de cada extremo.
+ */
+export async function fusionarResumenDia(db: D1Database, estacionId: number, fecha: string, lecturas: Lectura[]) {
+  if (!lecturas.length) return;
+  const mejor = new Map<keyof ResumenDiario, { v: number; ts: number }>();
+  for (const l of lecturas) {
+    for (const [col, campo, tipo] of CAMPOS_RESUMEN) {
+      const v = l[campo] as number | null;
+      if (v === null || v === undefined) continue;
+      const m = mejor.get(col);
+      if (!m || (tipo === "max" ? v > m.v : v < m.v)) mejor.set(col, { v, ts: l.ts });
+    }
+  }
+  const valores: unknown[] = [estacionId, fecha, lecturas.length];
+  for (const [col, , , conHora] of CAMPOS_RESUMEN) {
+    const m = mejor.get(col);
+    valores.push(m?.v ?? null);
+    if (conHora) valores.push(m?.ts ?? null);
+  }
+  await db.prepare(SQL_RESUMEN).bind(...valores).run();
+}
+
+/**
+ * Guarda muchas lecturas con pocas consultas (importación de históricos): varias filas por sentencia, con los
+ * valores escritos en la propia sentencia (solo números, que se comprueban). Nunca pisa lecturas que ya existan.
+ */
+export async function guardarLecturasLote(db: D1Database, estacionId: number, lecturas: Lectura[], fuente: string) {
+  if (!/^[a-z_]+$/.test(fuente)) throw new Error("Fuente no válida");
+  const valor = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? String(v) : "NULL");
+  const filas = lecturas.map(
+    (l) => `(${estacionId}, ${valor(l.ts)}, '${fuente}', ${COLUMNAS.filter((c) => c !== "ts" && c !== "fuente").map((c) => valor(l[c])).join(", ")})`,
+  );
+  const cols = COLUMNAS.filter((c) => c !== "ts" && c !== "fuente");
+  const sentencias = [];
+  for (let i = 0; i < filas.length; i += 150) {
+    sentencias.push(db.prepare(`INSERT OR IGNORE INTO lecturas (estacion_id, ts, fuente, ${cols.join(", ")}) VALUES ${filas.slice(i, i + 150).join(", ")}`));
+  }
+  if (sentencias.length) await db.batch(sentencias);
 }
 
 /** Mezcla en el resumen de hoy los extremos que da la propia fuente (sin hora conocida). */

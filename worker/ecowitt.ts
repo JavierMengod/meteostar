@@ -70,6 +70,10 @@ export function leerEnvioConsola(f: Record<string, unknown>, ahora: number): Lec
     uv: num(f.uv ?? f.UV),
     temp_int: conv(num(f.tempinf ?? f.indoortempf), fAC),
     hum_int: num(f.humidityin ?? f.indoorhumidity),
+    // Sensor de rayos WH57: lightning_num (rayos hoy), lightning (km del último), lightning_time (su hora)
+    rayos: num(f.lightning_num),
+    rayos_dist: num(f.lightning),
+    rayos_ts: num(f.lightning_time),
   });
 }
 
@@ -121,5 +125,16 @@ export function leerRespuestaApi(json: any, ahora: number): Lectura | null {
     uv: v(d.solar_and_uvi?.uvi),
     temp_int: v(d.indoor?.temperature),
     hum_int: v(d.indoor?.humidity),
+    // Sensor de rayos: la distancia viene en millas salvo que se pida otra unidad
+    rayos: v(d.lightning?.count),
+    rayos_dist: rayosKm(d.lightning?.distance),
+    rayos_ts: num(d.lightning?.distance?.time),
   });
+}
+
+/** Distancia del último rayo en km (ecowitt.net la da en millas por defecto). */
+function rayosKm(x: { unit?: string; value?: string } | undefined): number | null {
+  const d = num(x?.value);
+  if (d === null) return null;
+  return x?.unit === "mi" ? Math.round(d * 1.609344 * 10) / 10 : d;
 }

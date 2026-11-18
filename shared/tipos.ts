@@ -19,6 +19,10 @@ export interface Lectura {
   uv: number | null;
   temp_int: number | null;
   hum_int: number | null;
+  /** Sensor de rayos (si lo hay): rayos detectados hoy, distancia del último (km) y su hora (segundos Unix) */
+  rayos?: number | null;
+  rayos_dist?: number | null;
+  rayos_ts?: number | null;
 }
 
 export interface ResumenDiario {
@@ -39,6 +43,8 @@ export interface ResumenDiario {
   intensidad_max_ts: number | null;
   radiacion_max: number | null;
   uv_max: number | null;
+  /** Rayos detectados en el día (si hay sensor) */
+  rayos?: number | null;
   lecturas: number;
 }
 

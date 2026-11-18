@@ -4,6 +4,7 @@ import { leerMeteoclimatic, leerObservacionesAemet, leerWunderground } from "../
 import { leerEnvioConsola } from "../worker/ecowitt";
 import { slugDe } from "../worker/estaciones";
 import { leerRssEstacion } from "../worker/meteoclimatic";
+import { lecturasHistorico } from "../worker/importar-ecowitt";
 
 describe("Meteoclimatic", () => {
   const xml = `<?xml version="1.0" encoding="ISO-8859-15"?><meteodata><stations><station>
@@ -140,5 +141,24 @@ describe("Meteoclimatic: RSS de una estación", () => {
 
   it("devuelve null si no hay estación", () => {
     expect(leerRssEstacion("<rss><channel></channel></rss>")).toBeNull();
+  });
+});
+
+describe("Histórico de ecowitt.net", () => {
+  it("convierte la respuesta de «history» en lecturas del día de Madrid", () => {
+    // 22:55 UTC del 17 = 23:55 del 17 en Madrid; 23:05 UTC = 00:05 del 18
+    const t1 = String(Date.UTC(2026, 10, 17, 22, 55) / 1000);
+    const t2 = String(Date.UTC(2026, 10, 17, 23, 5) / 1000);
+    const data = {
+      outdoor: { temperature: { list: { [t1]: "10.04", [t2]: "9.8" } }, humidity: { list: { [t1]: "80", [t2]: "81" } } },
+      wind: { wind_gust: { list: { [t1]: "12.6", [t2]: "" } } },
+      rainfall: { daily: { list: { [t1]: "1.2", [t2]: "0" } } },
+    };
+    const l17 = lecturasHistorico(data, "2026-11-17");
+    expect(l17).toHaveLength(1);
+    expect(l17[0]).toMatchObject({ ts: Number(t1), temp: 10, hum: 80, racha: 12.6, lluvia_dia: 1.2, fuente: "ecowitt_historico" });
+    const l18 = lecturasHistorico(data, "2026-11-18");
+    expect(l18).toHaveLength(1);
+    expect(l18[0]).toMatchObject({ temp: 9.8, racha: null });
   });
 });
