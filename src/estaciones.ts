@@ -2,7 +2,7 @@
 import type { RespuestaDatos } from "../shared/tipos";
 
 /** Margen para considerar una lectura «en directo»: 20 min; 45 en Meteoclimatic (publica cada 10-20); 90 en AEMET (horaria). */
-const MARGEN: Record<string, number> = { aemet: 5400, meteoclimatic: 2700 };
+const MARGEN: Record<string, number> = { aemet: 5400, meteoclimatic: 2700, wunderground: 2700 };
 export const enDirecto = (d: RespuestaDatos, ahora: number) => !!d.actual && ahora - d.actual.ts < (MARGEN[d.estacion.fuente] ?? 1200);
 
 export const COLOR_SIN_DATOS = "#9ca3af";

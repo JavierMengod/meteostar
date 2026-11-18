@@ -20,7 +20,8 @@ import { leerEnvioConsola } from "../ecowitt";
 import { datosEstacion, estacionesPublicas, estacionPorSlug, estacionPorToken, type FilaEstacion } from "../estaciones";
 import { fechaAnterior, fechaLocal, inicioDia } from "../fechas";
 import { detalleEmbalse, estadoEmbalses } from "../embalses";
-import { catalogoExternas } from "../externas";
+import { catalogoExternas, catalogoWU } from "../externas";
+import { CUPO_FICHAS, observacionWU, resumenObservacion } from "../wunderground";
 import { PROVINCIAS_MC } from "../meteoclimatic";
 import { obtenerPrevision } from "../prevision";
 import { detalleAforo, estadoAforos } from "../aforos";
@@ -95,6 +96,24 @@ app.get("/estaciones/meteoclimatic", async (c) => {
   } catch (e) {
     console.error(e);
     return c.json({ error: "No se ha podido leer Meteoclimatic" }, 502);
+  }
+});
+
+/** Estaciones de Weather Underground de la zona (nombre y posición; la lista se renueva una vez al día). */
+app.get("/estaciones/wunderground", async (c) => {
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.json(await catalogoWU(c.env));
+});
+
+/** Dato actual de una estación de Weather Underground (al pulsarla en el mapa; 10 minutos en caché). */
+app.get("/estaciones/wunderground/:codigo", async (c) => {
+  const codigo = c.req.param("codigo").toUpperCase();
+  if (!(await c.env.DB.prepare("SELECT 1 FROM wunderground WHERE upper(codigo) = ?").bind(codigo).first())) return c.json({ error: "Estación no encontrada" }, 404);
+  try {
+    c.header("Cache-Control", "public, max-age=300");
+    return c.json(resumenObservacion(await observacionWU(c.env, codigo, CUPO_FICHAS)));
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "No disponible" }, 503);
   }
 });
 

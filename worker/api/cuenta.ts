@@ -394,8 +394,10 @@ app.get("/admin/externas/catalogo", async (c) => {
 });
 
 app.post("/admin/externas", async (c) => {
-  const codigo = texto((await cuerpo(c))?.codigo, 30).toUpperCase();
-  const r = await anadirExterna(c.env, c.get("usuario").id, codigo);
+  const b = await cuerpo(c);
+  const codigo = texto(b?.codigo, 30).toUpperCase();
+  const fuente = b?.fuente === "wunderground" ? "wunderground" : "meteoclimatic";
+  const r = await anadirExterna(c.env, c.get("usuario").id, fuente, codigo);
   if ("error" in r) return c.json(r, 400);
   // Primera lectura ahora mismo (sale del feed de la provincia, ya en caché): así se ve con datos al momento
   const f = await estacionPorSlug(c.env.DB, r.slug);

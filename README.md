@@ -72,6 +72,7 @@ La primera vez, entra en `/primeros-pasos` con el `SETUP_TOKEN` para crear la cu
    npx wrangler secret put CLAVE_CIFRADO   # 32 bytes en base64
    npx wrangler secret put SETUP_TOKEN     # para crear el primer administrador
    npx wrangler secret put AEMET_API_KEY   # opcional, para las estaciones oficiales
+   npx wrangler secret put WU_API_KEY      # opcional, estaciones de Weather Underground (cupo de 1.200 peticiones al día)
    ```
 6. `npm run deploy`
 7. Abrir `/primeros-pasos`, crear el administrador y, desde **Administración**, invitar a los demás.

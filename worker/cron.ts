@@ -17,7 +17,7 @@ export async function leerEstacion(env: Env, f: FilaEstacion, ahora: number): Pr
   const config = await descifrar(env, f.config);
   const resultado = await con.leer(config, env, ahora);
   // Las fuentes horarias (AEMET) traen las últimas 24 h; Meteoclimatic publica cada 10-20 min; las demás, solo valen si son recientes
-  const antiguedad = f.fuente === "aemet" ? 86400 : f.fuente === "meteoclimatic" ? 3600 : 900;
+  const antiguedad = f.fuente === "aemet" ? 86400 : f.fuente === "meteoclimatic" ? 3600 : f.fuente === "wunderground" ? 1800 : 900;
   let nuevas = 0;
   for (const l of resultado.lecturas) {
     if (ahora - l.ts > antiguedad || l.ts > ahora + 300) continue;

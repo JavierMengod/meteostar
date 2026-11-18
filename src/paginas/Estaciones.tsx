@@ -1,7 +1,7 @@
 // Estaciones: igual que las páginas de ríos y embalses. Arriba las que sigue el usuario; debajo, todas: las de
 // Meteostar (de la red, oficiales y de otras redes dadas de alta) y, en el mapa y al final de la lista, todas las de
 // Meteoclimatic de Teruel que aún no están dadas de alta (solo su último dato: no se guardan).
-import { Fragment, lazy, Suspense, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import type { EstacionExterna, RespuestaDatos, RespuestaRed } from "../../shared/tipos";
 import BotonSeguir from "../componentes/BotonSeguir";
 import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
@@ -16,6 +16,36 @@ const Mapa = lazy(() => import("../componentes/Mapa"));
 type Seguidos = ReturnType<typeof useSeguidos>;
 
 const quitarAcentos = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+/** Color de los puntos de Weather Underground (su dato solo se pide al pulsarlos) */
+const COLOR_AL_PULSAR = "#8c97a8";
+const NOMBRE_RED = { meteoclimatic: "Meteoclimatic", wunderground: "Weather Underground" } as const;
+const enlaceRed = (e: EstacionExterna) =>
+  e.fuente === "meteoclimatic" ? `https://www.meteoclimatic.net/perfil/${e.codigo}` : `https://www.wunderground.com/dashboard/pws/${e.codigo}`;
+
+/** Distancia aproximada en km */
+const distancia = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => Math.hypot((a.lat - b.lat) * 111, (a.lon - b.lon) * 85);
+const primeraPalabra = (s: string) => quitarAcentos(s).split(/[^a-z]+/).find((p) => p.length > 2) ?? "";
+
+/**
+ * Estaciones de Weather Underground que ya están en el mapa por otra vía: la misma estación publicando también en
+ * Meteoclimatic o ya en Meteostar. Cada una de esas «se queda» como mucho con una de Weather Underground: la más
+ * cercana, a menos de 1,5 km y con el mismo pueblo en el nombre (en un pueblo puede haber varias estaciones distintas).
+ * Se prefiere la otra, que no gasta peticiones de la clave.
+ */
+function duplicadasWU(wu: EstacionExterna[], otras: { lat: number; lon: number; nombre: string }[]): Set<string> {
+  const fuera = new Set<string>();
+  for (const o of otras) {
+    const p = primeraPalabra(o.nombre);
+    let mejor: EstacionExterna | null = null;
+    for (const e of wu) {
+      if (fuera.has(e.codigo) || !p || primeraPalabra(e.nombre) !== p || distancia(e, o) >= 1.5) continue;
+      if (!mejor || distancia(e, o) < distancia(mejor, o)) mejor = e;
+    }
+    if (mejor) fuera.add(mejor.codigo);
+  }
+  return fuera;
+}
 
 const GRUPOS = { particular: "Estaciones de la red", oficial: "Estaciones oficiales", externa: "Otras redes de aficionados" } as const;
 
@@ -60,10 +90,13 @@ function FilaEstacion({ d, ahora, seg }: { d: RespuestaDatos; ahora: number; seg
 function FilaLibre({ e, ahora, onElegir }: { e: EstacionExterna; ahora: number; onElegir: () => void }) {
   return (
     <button type="button" className="fila-rio fila-libre" onClick={onElegir}>
-      <i className="punto-rio" style={{ background: colorTemp(e.temp), opacity: 0.6 }} aria-hidden="true" />
+      <i className="punto-rio" style={{ background: e.fuente === "wunderground" && e.temp === null ? COLOR_AL_PULSAR : colorTemp(e.temp), opacity: 0.6 }} aria-hidden="true" />
       <span className="fila-rio-nombre">
         <b>{e.nombre}</b>
-        <small className="suave">Meteoclimatic{e.t ? ` · ${hace(ahora - e.t)}` : ""}</small>
+        <small className="suave">
+          {NOMBRE_RED[e.fuente]}
+          {e.t ? ` · ${hace(ahora - e.t)}` : e.fuente === "wunderground" ? " · pulsa para ver su dato" : ""}
+        </small>
       </span>
       <span className="fila-rio-valor">
         <b>{e.temp === null ? "—" : n(e.temp)}</b> <small className="suave">°C</small>
@@ -78,14 +111,46 @@ function FilaLibre({ e, ahora, onElegir }: { e: EstacionExterna; ahora: number; 
 }
 
 /** Ficha de una estación de Meteoclimatic que no está dada de alta (sus datos no se guardan). */
-function FichaLibre({ e, ahora, admin, onCerrar }: { e: EstacionExterna; ahora: number; admin: boolean; onCerrar: () => void }) {
+function FichaLibre({
+  e: base,
+  ahora,
+  admin,
+  onCerrar,
+  onDato,
+}: {
+  e: EstacionExterna;
+  ahora: number;
+  admin: boolean;
+  onCerrar: () => void;
+  /** Para que el mapa y la lista enseñen también el dato pedido */
+  onDato: (codigo: string, dato: { t: number | null; temp: number | null }) => void;
+}) {
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Weather Underground: el dato se pide al abrir la ficha (una petición de la clave, 10 minutos en caché)
+  const [dato, setDato] = useState<{ t: number | null; temp: number | null } | null>(null);
+  const [cargando, setCargando] = useState(false);
+  useEffect(() => {
+    setDato(null);
+    setError(null);
+    if (base.fuente !== "wunderground") return;
+    setCargando(true);
+    fetch(`/api/estaciones/wunderground/${base.codigo}`)
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error ?? "No disponible");
+        setDato(j);
+        onDato(base.codigo, j);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "No disponible"))
+      .finally(() => setCargando(false));
+  }, [base.codigo, base.fuente]);
+  const e = dato ? { ...base, t: dato.t, temp: dato.temp } : base;
   const alta = async () => {
     setOcupado(true);
     setError(null);
     try {
-      const r = await enviar<{ slug: string }>("/api/admin/externas", "POST", { codigo: e.codigo });
+      const r = await enviar<{ slug: string }>("/api/admin/externas", "POST", { codigo: e.codigo, fuente: e.fuente });
       // Recarga completa: así la red (menú, lista y mapa) ya la incluye
       location.href = `/estacion/${r.slug}`;
     } catch (err) {
@@ -98,7 +163,7 @@ function FichaLibre({ e, ahora, admin, onCerrar }: { e: EstacionExterna; ahora: 
       <div className="tarjeta-rio-cabecera">
         <div>
           <h3>{e.nombre}</h3>
-          <p className="suave pequeno">Meteoclimatic · sin dar de alta en Meteostar</p>
+          <p className="suave pequeno">{NOMBRE_RED[e.fuente]} · sin dar de alta en Meteostar</p>
         </div>
         <button type="button" className="boton-cerrar" onClick={onCerrar} aria-label="Cerrar">
           ✕
@@ -109,8 +174,8 @@ function FichaLibre({ e, ahora, admin, onCerrar }: { e: EstacionExterna; ahora: 
         <sup>°C</sup>
       </p>
       <p className="suave pequeno">
-        {e.t ? `Dato de Meteoclimatic ${hace(ahora - e.t)}` : "Sin datos ahora mismo"}. Sus datos no se guardan en Meteostar: solo se ve el último. Para tener su
-        histórico y sus gráficas hay que darla de alta.
+        {cargando ? "Pidiendo su dato a Weather Underground…" : e.t ? `Dato de ${NOMBRE_RED[e.fuente]} ${hace(ahora - e.t)}` : "Sin datos ahora mismo"}. Sus datos no
+        se guardan en Meteostar: solo se ve el último. Para tener su histórico y sus gráficas hay que darla de alta.
       </p>
       <div className="botones-ficha">
         {admin && (
@@ -118,8 +183,8 @@ function FichaLibre({ e, ahora, admin, onCerrar }: { e: EstacionExterna; ahora: 
             {ocupado ? "Dando de alta…" : "+ Dar de alta en Meteostar"}
           </button>
         )}
-        <a className="boton-secundario" href={`https://www.meteoclimatic.net/perfil/${e.codigo}`} target="_blank" rel="noreferrer">
-          Ver en Meteoclimatic
+        <a className="boton-secundario" href={enlaceRed(e)} target="_blank" rel="noreferrer">
+          Ver en {NOMBRE_RED[e.fuente]}
         </a>
       </div>
       {error && <p className="aviso-externas">{error}</p>}
@@ -163,13 +228,23 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
   // Todas las de Meteoclimatic de Teruel, con su dato actual (las que no están dadas de alta no se guardan)
   const { datos: catalogo } = usePeticion<EstacionExterna[]>("/api/estaciones/meteoclimatic", 5 * 60_000);
   const [elegida, setElegida] = useState<string | null>(null);
+  // Datos de Weather Underground ya pedidos al abrir sus fichas
+  const [pedidos, setPedidos] = useState<Record<string, { t: number | null; temp: number | null }>>({});
   const estaciones = red?.estaciones ?? [];
   const q = quitarAcentos(busca.trim());
   const filtradas = useMemo(
     () => estaciones.filter((d) => (!tipo || d.estacion.tipo === tipo) && (!q || quitarAcentos(`${d.estacion.nombre} ${d.estacion.municipio} ${d.estacion.red ?? ""}`).includes(q))),
     [estaciones, q, tipo],
   );
-  const libres = useMemo(() => (catalogo ?? []).filter((e) => !e.enMeteostar), [catalogo]);
+  const { datos: listaWU } = usePeticion<EstacionExterna[]>("/api/estaciones/wunderground", 60 * 60_000);
+  const libres = useMemo(() => {
+    const mc = (catalogo ?? []).filter((e) => !e.enMeteostar);
+    // Para quitar de Weather Underground las que ya salen por Meteoclimatic o están en Meteostar
+    const otras = [...(catalogo ?? []), ...estaciones.map((d) => d.estacion)];
+    const fuera = duplicadasWU(listaWU ?? [], otras);
+    const wu = (listaWU ?? []).filter((e) => !e.enMeteostar && !fuera.has(e.codigo));
+    return [...mc, ...wu.map((e) => (pedidos[e.codigo] ? { ...e, ...pedidos[e.codigo] } : e))];
+  }, [catalogo, listaWU, estaciones, pedidos]);
   const libresFiltradas = useMemo(() => libres.filter((e) => (!tipo || tipo === "externa") && (!q || quitarAcentos(e.nombre).includes(q))), [libres, q, tipo]);
   if (!red) return <Cargando />;
   const { ahora } = red;
@@ -200,7 +275,7 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
       <section className="cabecera-embalses">
         <h1>Estaciones</h1>
         <p className="suave">
-          Las estaciones meteorológicas de la zona: las de Meteostar y todas las de Meteoclimatic en la provincia de Teruel. Pulsa una estación para ver sus datos;
+          Las estaciones meteorológicas de la zona: las de Meteostar y las de aficionados que publican en Meteoclimatic y Weather Underground. Pulsa una estación para ver sus datos;
           las dadas de alta en Meteostar tienen además sus gráficas y su histórico.
         </p>
       </section>
@@ -239,7 +314,7 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
         </>
       )}
 
-      <CabeceraSeccion titulo="Todas las estaciones" nota={`${estaciones.length} en Meteostar${libres.length ? ` · ${libres.length} más en Meteoclimatic` : ""}`} />
+      <CabeceraSeccion titulo="Todas las estaciones" nota={`${estaciones.length} en Meteostar${libres.length ? ` · ${libres.length} más en otras redes` : ""}`} />
       <p className="anadir-admin">
         <a className="boton-secundario" href={admin ? "/admin#otras-redes" : usuario ? "/cuenta/estacion/nueva" : "/entrar"}>
           + {admin ? "Añadir o gestionar estaciones" : "Añade tu estación"}
@@ -259,7 +334,7 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
             <option value="">Todas</option>
             <option value="particular">De la red</option>
             <option value="oficial">Oficiales</option>
-            <option value="externa">Meteoclimatic</option>
+            <option value="externa">Otras redes</option>
           </select>
         </div>
       )}
@@ -278,8 +353,8 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
                 lon: e.lon,
                 nombre: e.nombre,
                 valor: e.temp,
-                href: `meteoclimatic:${e.codigo}`,
-                color: colorTemp(e.temp),
+                href: `${e.fuente}:${e.codigo}`,
+                color: e.fuente === "wunderground" && e.temp === null ? COLOR_AL_PULSAR : colorTemp(e.temp),
                 atenuado: true,
                 fijo: e.codigo === elegida,
                 alPulsar: () => elegir(e.codigo),
@@ -307,9 +382,10 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
             <i style={{ background: color }} /> {texto}{" "}
           </Fragment>
         ))}
-        <i style={{ background: COLOR_SIN_DATOS }} /> Sin datos <i className="leyenda-libre" /> Sin dar de alta
+        <i style={{ background: COLOR_SIN_DATOS }} /> Sin datos <i className="leyenda-libre" /> Sin dar de alta <i className="leyenda-libre" style={{ background: COLOR_AL_PULSAR }} />{" "}
+        Weather Underground (dato al pulsar)
       </p>
-      {libreElegida && <FichaLibre e={libreElegida} ahora={ahora} admin={admin} onCerrar={() => setElegida(null)} />}
+      {libreElegida && <FichaLibre e={libreElegida} ahora={ahora} admin={admin} onCerrar={() => setElegida(null)} onDato={(c, d) => setPedidos((p) => ({ ...p, [c]: d }))} />}
 
       {total > 0 ? (
         <>
@@ -328,8 +404,8 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
           ))}
           {libresFiltradas.length > 0 && (
             <Grupo
-              titulo="Más estaciones de Meteoclimatic"
-              resumen={`${libresFiltradas.length} sin dar de alta · solo su último dato`}
+              titulo="Más estaciones de la zona"
+              resumen={`${libresFiltradas.length} sin dar de alta · Meteoclimatic y Weather Underground`}
               abierto={abierto("libres")}
               onCambio={cambiar("libres")}
             >
@@ -348,7 +424,11 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
         <a href="https://www.meteoclimatic.net/" target="_blank" rel="noreferrer">
           Meteoclimatic
         </a>{" "}
-        (CC BY-NC-ND) · Oficiales:{" "}
+        (CC BY-NC-ND) y{" "}
+        <a href="https://www.wunderground.com/" target="_blank" rel="noreferrer">
+          Weather Underground
+        </a>{" "}
+        · Oficiales:{" "}
         <a href="https://opendata.aemet.es/" target="_blank" rel="noreferrer">
           AEMET OpenData
         </a>{" "}

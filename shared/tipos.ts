@@ -512,10 +512,10 @@ export interface ResumenAforo {
 /** [fecha, caudal medio, origen: a = anuario, m = medido en tiempo real] */
 export type DiaAforo = [string, number | null, "a" | "m"];
 
-/** Estación de otra red (Meteoclimatic) en el mapa de Administración. */
+/** Estación de otra red (Meteoclimatic o Weather Underground) en el mapa. */
 export interface EstacionExterna {
   codigo: string;
-  fuente: "meteoclimatic";
+  fuente: "meteoclimatic" | "wunderground";
   nombre: string;
   lat: number;
   lon: number;

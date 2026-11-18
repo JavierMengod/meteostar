@@ -5,6 +5,7 @@ import { puntoRocio, redondear, sensacionTermica } from "../shared/meteo";
 import { leerRespuestaApi, urlApiEcowitt } from "./ecowitt";
 import { fechaLocal } from "./fechas";
 import { bloqueEstacion, feedProvincia, leerRssEstacion, regionDe, rssEstacion } from "./meteoclimatic";
+import { observacionWU } from "./wunderground";
 
 /** Extremos del día que da la propia fuente (por si las lecturas no los recogen todos). */
 export interface ExtremosDia {
@@ -93,9 +94,17 @@ export function leerWunderground(j: any): Lectura | null {
   });
 }
 
-async function leerWU(config: Record<string, string>): Promise<ResultadoLectura> {
-  const p = new URLSearchParams({ stationId: config.estacion, format: "json", units: "m", numericPrecision: "decimal", apiKey: config.api_key });
-  const l = leerWunderground(await pedirJson(`https://api.weather.com/v2/pws/observations/current?${p}`));
+async function leerWU(config: Record<string, string>, env: Env): Promise<ResultadoLectura> {
+  let j: any;
+  if (config.api_key) {
+    // Estación de un usuario, con su propia clave
+    const p = new URLSearchParams({ stationId: config.estacion, format: "json", units: "m", numericPrecision: "decimal", apiKey: config.api_key });
+    j = await pedirJson(`https://api.weather.com/v2/pws/observations/current?${p}`);
+  } else {
+    // Estación de otra red dada de alta desde el mapa: la clave general de la web, con su cupo diario
+    j = await observacionWU(env, config.estacion);
+  }
+  const l = leerWunderground(j);
   if (!l) throw new Error("Weather Underground: la estación no devuelve datos");
   return { lecturas: [l] };
 }
@@ -242,15 +251,15 @@ export const CONECTORES: Conector[] = [
   {
     id: "wunderground",
     nombre: "Weather Underground",
-    descripcion: "Meteostar lee una estación personal de Weather Underground cada 5 minutos.",
+    descripcion: "Meteostar lee una estación personal de Weather Underground cada 10 minutos.",
     modo: "consulta",
-    intervalo: 5,
+    intervalo: 10,
     campos: [
       { nombre: "estacion", etiqueta: "ID de la estación", tipo: "texto", obligatorio: true, ejemplo: "ITERUE12" },
       { nombre: "api_key", etiqueta: "Clave de API", tipo: "secreto", obligatorio: true, ayuda: "En wunderground.com → Mi perfil → Claves API" },
     ],
     soloAdmin: false,
-    leer: (config) => leerWU(config),
+    leer: (config, env) => leerWU(config, env),
   },
   {
     id: "meteoclimatic",
