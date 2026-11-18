@@ -3841,3 +3841,22 @@ h3 {
   font-weight: 600;
   font-size: 0.9rem;
 }
+
+/* Marcadores compactos (mapa de ríos: muchos puntos juntos) */
+.marcador.pequeno .marcador-temp {
+  font-size: 0.74rem;
+  padding: 2px 6px;
+  border-width: 1.5px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+}
+.marcador.pequeno .marcador-nombre {
+  margin-top: 2px;
+  font-size: 0.62rem;
+  padding: 1px 5px;
+}
+.marcador.pequeno i {
+  width: 7px;
+  height: 7px;
+  margin-top: 2px;
+  border-width: 1.5px;
+}

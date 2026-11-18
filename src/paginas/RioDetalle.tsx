@@ -33,7 +33,7 @@ function Situacion({ a, embalses }: { a: DetalleAforo; embalses: RespuestaEmbals
   return (
     <div className="rejilla-situacion">
       <Suspense fallback={<div className="mapa" style={{ height: 260 }} />}>
-        <Mapa puntos={puntos} alto={260} margen={0.7} />
+        <Mapa puntos={puntos} alto={260} margen={0.7} pequeno />
       </Suspense>
       <div className="situacion-datos">
         {e && (

@@ -202,6 +202,7 @@ export default function Rios() {
           <Mapa
             alto={420}
             margen={0.05}
+            pequeno
             agrupar={filtrados.length > 8}
             puntos={filtrados.map((a) => {
               const v = valor(a);
