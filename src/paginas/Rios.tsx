@@ -235,6 +235,7 @@ export default function Rios() {
                 etiqueta: v.unidad === "m³/s" ? `${v.cifra} m³/s` : v.unidad ? `${v.cifra} m` : "—",
                 href: `/rios/${a.slug}`,
                 color: situacionAforo(a).color,
+                fijo: seg.destacados.includes(a.slug),
               };
             })}
           />
@@ -269,12 +270,12 @@ export default function Rios() {
         <p className="vacio">{aforos.length ? "Ningún río coincide con la búsqueda." : "Todavía no hay ríos configurados."}</p>
       )}
 
-      <p className="nota-fuente seccion">
-        Caudal medido por las confederaciones hidrográficas y publicado por el{" "}
+      <p className="pie-fuente">
+        Datos:{" "}
         <a href="https://observatorioagua.miteco.es/hidrologia/" target="_blank" rel="noreferrer">
           Observatorio del Agua (MITECO)
         </a>
-        , con unos 40–60 minutos de retraso. Datos en tiempo real, provisionales y sin validar. «Lo normal» sale del Anuario de Aforos (1991–2020).
+        , provisionales y con 40–60 min de retraso · Lo normal: Anuario de Aforos 1991–2020
       </p>
     </>
   );

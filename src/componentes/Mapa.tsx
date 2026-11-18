@@ -20,6 +20,8 @@ export interface PuntoMapa {
   etiqueta?: string;
   /** Color de la burbuja */
   color?: string;
+  /** Siempre suelto y por encima, aunque se agrupen los demás (los ríos que sigues) */
+  fijo?: boolean;
 }
 
 const escapar = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -41,10 +43,16 @@ function Agrupados({ puntos, pequeno }: { puntos: PuntoMapa[]; pequeno: boolean 
       iconCreateFunction: (c) =>
         L.divIcon({ className: "grupo-mapa", html: `<span>${c.getChildCount()}</span>`, iconSize: [34, 34] }),
     });
-    for (const p of puntos) grupo.addLayer(L.marker([p.lat, p.lon], { icon: icono(p, pequeno) }));
+    const fijos = L.layerGroup();
+    for (const p of puntos) {
+      if (p.fijo) fijos.addLayer(L.marker([p.lat, p.lon], { icon: icono(p, pequeno), zIndexOffset: 1000 }));
+      else grupo.addLayer(L.marker([p.lat, p.lon], { icon: icono(p, pequeno) }));
+    }
     mapa.addLayer(grupo);
+    mapa.addLayer(fijos);
     return () => {
       mapa.removeLayer(grupo);
+      mapa.removeLayer(fijos);
     };
   }, [mapa, puntos, pequeno]);
   return null;

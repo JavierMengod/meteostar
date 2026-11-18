@@ -3897,3 +3897,13 @@ h3 {
   font-weight: 600;
   font-size: 1.3rem;
 }
+
+/* Fuente de los datos al pie de la página, separada de la lista */
+.pie-fuente {
+  margin: 28px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borde);
+  font-size: 0.78rem;
+  color: var(--texto-suave);
+  text-align: center;
+}
