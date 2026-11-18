@@ -7,6 +7,32 @@ import { crearEstacion } from "./estaciones";
 import { PROVINCIAS_GUARDADAS, PROVINCIAS_MC, catalogoGuardado, catalogoProvincia, regionDe } from "./meteoclimatic";
 import { MAX_DADAS_DE_ALTA, listaWU } from "./wunderground";
 
+const sumarDias = (f: string, n: number) => new Date(Date.parse(`${f}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+/** Gemelas confirmadas y avisos de calidad de una red: código → dato. */
+async function cruceDe(db: D1Database, red: "meteoclimatic" | "wunderground") {
+  const [mio, otro] = red === "meteoclimatic" ? ["mc", "wu"] : ["wu", "mc"];
+  const gemelas = new Map(
+    (
+      await db
+        // Una sola gemela por estación de Meteoclimatic: la más cercana de las que coinciden (en un pueblo puede haber
+        // varias de Weather Underground que hoy marquen lo mismo sin ser la misma)
+        .prepare(
+          `SELECT ${mio} AS codigo, ${otro} AS gemela FROM gemelas g WHERE iguales >= 1 AND iguales > distintos
+           AND km = (SELECT min(km) FROM gemelas h WHERE h.mc = g.mc AND h.iguales >= 1 AND h.iguales > h.distintos)`,
+        )
+        .all<{ codigo: string; gemela: string }>()
+    ).results.map((g) => [g.codigo, g.gemela]),
+  );
+  const avisos = new Map(
+    (await db.prepare("SELECT codigo, aviso FROM avisos_estacion WHERE red = ?").bind(red).all<{ codigo: string; aviso: string }>()).results.map((a) => [
+      a.codigo,
+      a.aviso,
+    ]),
+  );
+  return { gemelas, avisos };
+}
+
 type Fuente = EstacionExterna["fuente"];
 const COLUMNA: Record<Fuente, "meteoclimatic" | "wunderground"> = { meteoclimatic: "meteoclimatic", wunderground: "wunderground" };
 
@@ -25,13 +51,30 @@ export async function catalogoExternas(db: D1Database, region: string): Promise<
   const lista = PROVINCIAS_GUARDADAS.includes(region) ? await catalogoGuardado(db, region) : await catalogoProvincia(region);
   // Ya en Meteostar: las añadidas desde el mapa (externas) y las de la red que publican en Meteoclimatic (como Villastar)
   const enRed = await yaEnMeteostar(db, "meteoclimatic");
-  return lista.map((e) => ({ ...e, fuente: "meteoclimatic", enMeteostar: enRed.get(e.codigo) ?? null }));
+  const { gemelas, avisos } = await cruceDe(db, "meteoclimatic");
+  return lista.map((e) => ({
+    ...e,
+    fuente: "meteoclimatic",
+    enMeteostar: enRed.get(e.codigo) ?? null,
+    gemela: gemelas.get(e.codigo) ?? null,
+    aviso: avisos.get(e.codigo) ?? null,
+  }));
 }
 
 /** Estaciones de Weather Underground de la zona (sin dato: se pide al pulsar cada una). */
 export async function catalogoWU(env: Env): Promise<EstacionExterna[]> {
   const enRed = await yaEnMeteostar(env.DB, "wunderground");
-  return (await listaWU(env)).map((e) => ({ ...e, fuente: "wunderground", t: null, temp: null, qos: null, enMeteostar: enRed.get(e.codigo.toUpperCase()) ?? null }));
+  const { gemelas, avisos } = await cruceDe(env.DB, "wunderground");
+  return (await listaWU(env)).map((e) => ({
+    ...e,
+    fuente: "wunderground",
+    t: null,
+    temp: null,
+    qos: null,
+    enMeteostar: enRed.get(e.codigo.toUpperCase()) ?? null,
+    gemela: gemelas.get(e.codigo) ?? null,
+    aviso: avisos.get(e.codigo) ?? null,
+  }));
 }
 
 async function altitudDe(lat: number, lon: number): Promise<number> {
@@ -87,6 +130,15 @@ export async function anadirExterna(env: Env, adminId: number, fuente: Fuente, c
     activa: 1,
   });
   if (fuente === "wunderground") await env.DB.prepare("UPDATE estaciones SET wunderground = ? WHERE id = ?").bind(codigo, id).run();
+  // Histórico de Weather Underground: el de la propia estación o, si es de Meteoclimatic, el de su gemela (si la tiene)
+  const deHistorico =
+    fuente === "wunderground"
+      ? codigo
+      : ((await env.DB.prepare("SELECT wu FROM gemelas WHERE mc = ? AND iguales >= 1 AND iguales > distintos ORDER BY km LIMIT 1").bind(codigo).first<string>("wu")) ?? null);
+  if (deHistorico) {
+    const ayer = sumarDias(new Date().toISOString().slice(0, 10), -1);
+    await env.DB.prepare("UPDATE estaciones SET historico_wu = ?, historico_pendiente = ?, historico_vacios = 0 WHERE id = ?").bind(deHistorico, ayer, id).run();
+  }
   const f = await env.DB.prepare("SELECT slug FROM estaciones WHERE id = ?").bind(id).first<{ slug: string }>();
   return { slug: f!.slug };
 }

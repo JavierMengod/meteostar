@@ -23,30 +23,6 @@ const NOMBRE_RED = { meteoclimatic: "Meteoclimatic", wunderground: "Weather Unde
 const enlaceRed = (e: EstacionExterna) =>
   e.fuente === "meteoclimatic" ? `https://www.meteoclimatic.net/perfil/${e.codigo}` : `https://www.wunderground.com/dashboard/pws/${e.codigo}`;
 
-/** Distancia aproximada en km */
-const distancia = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => Math.hypot((a.lat - b.lat) * 111, (a.lon - b.lon) * 85);
-const primeraPalabra = (s: string) => quitarAcentos(s).split(/[^a-z]+/).find((p) => p.length > 2) ?? "";
-
-/**
- * Estaciones de Weather Underground que ya están en el mapa por otra vía: la misma estación publicando también en
- * Meteoclimatic o ya en Meteostar. Cada una de esas «se queda» como mucho con una de Weather Underground: la más
- * cercana, a menos de 1,5 km y con el mismo pueblo en el nombre (en un pueblo puede haber varias estaciones distintas).
- * Se prefiere la otra, que no gasta peticiones de la clave.
- */
-function duplicadasWU(wu: EstacionExterna[], otras: { lat: number; lon: number; nombre: string }[]): Set<string> {
-  const fuera = new Set<string>();
-  for (const o of otras) {
-    const p = primeraPalabra(o.nombre);
-    let mejor: EstacionExterna | null = null;
-    for (const e of wu) {
-      if (fuera.has(e.codigo) || !p || primeraPalabra(e.nombre) !== p || distancia(e, o) >= 1.5) continue;
-      if (!mejor || distancia(e, o) < distancia(mejor, o)) mejor = e;
-    }
-    if (mejor) fuera.add(mejor.codigo);
-  }
-  return fuera;
-}
-
 const GRUPOS = { particular: "Estaciones de la red", oficial: "Estaciones oficiales", externa: "Otras redes de aficionados" } as const;
 
 /** Fila compacta de la lista de todas las estaciones. */
@@ -102,9 +78,15 @@ function FilaLibre({ e, ahora, onElegir }: { e: EstacionExterna; ahora: number; 
         <b>{e.temp === null ? "—" : n(e.temp)}</b> <small className="suave">°C</small>
       </span>
       <span className="fila-rio-estado">
-        <span className="pastilla-normal" style={{ background: COLOR_SIN_DATOS }}>
-          Sin dar de alta
-        </span>
+        {e.aviso ? (
+          <span className="pastilla-normal aviso-calidad" title={e.aviso}>
+            Puede medir mal
+          </span>
+        ) : (
+          <span className="pastilla-normal" style={{ background: COLOR_SIN_DATOS }}>
+            Sin dar de alta
+          </span>
+        )}
       </span>
     </button>
   );
@@ -173,9 +155,20 @@ function FichaLibre({
         {e.temp === null ? "—" : n(e.temp)}
         <sup>°C</sup>
       </p>
+      {e.aviso && (
+        <p className="aviso-externas">
+          ⚠ <b>Puede medir mal:</b> {e.aviso.charAt(0).toLowerCase() + e.aviso.slice(1)}.
+        </p>
+      )}
+      {e.gemela && (
+        <p className="suave pequeno">
+          Es la misma estación que <b>{e.gemela}</b> en {e.fuente === "meteoclimatic" ? "Weather Underground" : "Meteoclimatic"} (dan la misma máxima y
+          mínima).{e.fuente === "meteoclimatic" ? " Al darla de alta, su histórico se traerá de allí." : ""}
+        </p>
+      )}
       <p className="suave pequeno">
         {cargando ? "Pidiendo su dato a Weather Underground…" : e.t ? `Dato de ${NOMBRE_RED[e.fuente]} ${hace(ahora - e.t)}` : "Sin datos ahora mismo"}. Sus datos no
-        se guardan en Meteostar: solo se ve el último. Para tener su histórico y sus gráficas hay que darla de alta.
+        se guardan en Meteostar: solo se ve el último. Para tener sus gráficas y su histórico hay que darla de alta{e.fuente === "wunderground" ? " (el de años atrás se traerá de Weather Underground)" : ""}.
       </p>
       <div className="botones-ficha">
         {admin && (
@@ -240,9 +233,9 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
   const libres = useMemo(() => {
     const mc = (catalogo ?? []).filter((e) => !e.enMeteostar);
     // Para quitar de Weather Underground las que ya salen por Meteoclimatic o están en Meteostar
-    const otras = [...(catalogo ?? []), ...estaciones.map((d) => d.estacion)];
-    const fuera = duplicadasWU(listaWU ?? [], otras);
-    const wu = (listaWU ?? []).filter((e) => !e.enMeteostar && !fuera.has(e.codigo));
+    // Las de Weather Underground que son la misma estación que una de Meteoclimatic (gemelas comprobadas) no se repiten:
+    // queda la de Meteoclimatic, que no gasta peticiones
+    const wu = (listaWU ?? []).filter((e) => !e.enMeteostar && !e.gemela);
     return [...mc, ...wu.map((e) => (pedidos[e.codigo] ? { ...e, ...pedidos[e.codigo] } : e))];
   }, [catalogo, listaWU, estaciones, pedidos]);
   const libresFiltradas = useMemo(() => libres.filter((e) => (!tipo || tipo === "externa") && (!q || quitarAcentos(e.nombre).includes(q))), [libres, q, tipo]);

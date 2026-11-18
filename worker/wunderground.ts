@@ -34,7 +34,7 @@ export async function gastarCupo(db: D1Database, n = 1, limite = CUPO_DIARIO): P
   return fila !== null;
 }
 
-async function pedir(env: Env, url: string, limite = CUPO_DIARIO): Promise<Response> {
+export async function pedirWU(env: Env, url: string, limite = CUPO_DIARIO): Promise<Response> {
   if (!env.WU_API_KEY) throw new Error("Falta la clave de Weather Underground");
   if (!(await gastarCupo(env.DB, 1, limite))) throw new Error("Cupo diario de Weather Underground agotado");
   return fetch(`${url}&apiKey=${encodeURIComponent(env.WU_API_KEY)}`, { signal: AbortSignal.timeout(15_000) });
@@ -54,7 +54,7 @@ export async function listaWU(env: Env): Promise<EstacionWU[]> {
     try {
       const todas = new Map<string, EstacionWU>();
       for (const [lat, lon] of PUNTOS) {
-        const r = await pedir(env, `https://api.weather.com/v3/location/near?geocode=${lat},${lon}&product=pws&format=json`);
+        const r = await pedirWU(env, `https://api.weather.com/v3/location/near?geocode=${lat},${lon}&product=pws&format=json`);
         if (!r.ok) continue;
         const l = ((await r.json()) as any)?.location ?? {};
         (l.stationId ?? []).forEach((id: string, i: number) => {
@@ -87,7 +87,7 @@ export async function observacionWU(env: Env, codigo: string, limite = CUPO_DIAR
   const cache = caches.default;
   const guardada = await cache.match(clave);
   if (guardada) return guardada.json();
-  const r = await pedir(env, `https://api.weather.com/v2/pws/observations/current?stationId=${codigo}&format=json&units=m&numericPrecision=decimal`, limite);
+  const r = await pedirWU(env, `https://api.weather.com/v2/pws/observations/current?stationId=${codigo}&format=json&units=m&numericPrecision=decimal`, limite);
   if (r.status === 204) return null;
   if (!r.ok) throw new Error(`Weather Underground HTTP ${r.status}`);
   const texto = await r.text();

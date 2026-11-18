@@ -4195,3 +4195,8 @@ h3 {
     grid-template-areas: "temp" "viento" "hum" "pres" "lluvia";
   }
 }
+
+/* Estaciones de otras redes que pueden medir mal */
+.pastilla-normal.aviso-calidad {
+  background: #c2410c;
+}

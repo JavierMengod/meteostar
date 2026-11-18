@@ -542,4 +542,8 @@ export interface EstacionExterna {
   qos: number | null;
   /** Si ya está en Meteostar: como externa o como estación de la red que publica allí */
   enMeteostar: { slug: string; nombre: string; externa: boolean } | null;
+  /** La misma estación en la otra red (comprobado: misma máxima y mínima), si la hay */
+  gemela?: string | null;
+  /** «Puede medir mal»: motivo, si se ha detectado */
+  aviso?: string | null;
 }

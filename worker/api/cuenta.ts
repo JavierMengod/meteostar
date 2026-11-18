@@ -32,6 +32,7 @@ import {
 } from "../estaciones";
 import { ahora } from "./publica";
 import { anadirExterna, catalogoExternas, quitarExterna } from "../externas";
+import { comprobarCruce } from "../cruce";
 import { importarTramo, primerDiaEcowitt } from "../importar-ecowitt";
 import { PROVINCIAS_MC } from "../meteoclimatic";
 
@@ -407,6 +408,15 @@ app.get("/admin/externas/catalogo", async (c) => {
   } catch (e) {
     console.error(e);
     return c.json({ error: "No se ha podido leer Meteoclimatic" }, 502);
+  }
+});
+
+/** Hace ahora el cruce entre redes (gemelas y avisos), sin esperar a la comprobación semanal. */
+app.post("/admin/externas/cruzar", async (c) => {
+  try {
+    return c.json(await comprobarCruce(c.env));
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
   }
 });
 
