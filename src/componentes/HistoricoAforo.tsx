@@ -171,7 +171,7 @@ function Records({ titulo, lista, nota }: { titulo: string; lista: { fecha: stri
         {lista.map((c) => (
           <li key={c.fecha}>
             <span>{fechaLarga(c.fecha)}</span>
-            <b>{n(c.caudal, 0)} m³/s</b>
+            <b>{n(c.caudal, c.caudal < 1 ? 2 : c.caudal < 10 ? 1 : 0)} m³/s</b>
           </li>
         ))}
       </ol>
