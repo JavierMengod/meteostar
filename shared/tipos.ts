@@ -89,6 +89,8 @@ export interface RespuestaRed {
   red: Red;
   estaciones: RespuestaDatos[];
   ahora: number;
+  /** Las que se ven destacadas por defecto (sin cuenta): la estación de la web */
+  porDefecto: string[];
 }
 
 /** Serie de temperatura por estación (gráfica comparativa): slug → [t, temp][] */
@@ -244,7 +246,7 @@ export interface UsuarioSesion {
   rol: "usuario" | "admin";
   tema: Tema;
   /** Ríos y embalses que sigue (slugs) */
-  favoritos: { rios: string[]; embalses: string[] };
+  favoritos: { rios: string[]; embalses: string[]; estaciones: string[] };
 }
 
 export interface CampoConector {

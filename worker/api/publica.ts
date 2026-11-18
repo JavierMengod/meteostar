@@ -63,6 +63,7 @@ app.get("/red", async (c) => {
     red: red(c.env),
     estaciones: await Promise.all(filas.map((f) => datosEstacion(c.env.DB, f, t))),
     ahora: t,
+    porDefecto: filas.filter((f) => f.destacado).map((f) => f.slug),
   };
   c.header("Cache-Control", "no-cache");
   return c.json(respuesta);

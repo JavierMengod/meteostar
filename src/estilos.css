@@ -3938,3 +3938,19 @@ h3 {
 .punto-mapa a:hover span {
   transform: scale(1.3);
 }
+
+/* Estrella de seguir junto a la hora, en las tarjetas de estación */
+.te-acciones {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Lista de estaciones */
+.pastilla-normal.en-directo {
+  background: var(--e-alto);
+}
+.minmax-fila {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

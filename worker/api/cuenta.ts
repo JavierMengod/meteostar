@@ -71,7 +71,14 @@ app.get("/auth/estado", async (c) => {
   let usuario = null;
   if (u) {
     const favs = (await c.env.DB.prepare("SELECT tipo, slug FROM favoritos WHERE usuario_id = ? ORDER BY creado").bind(u.id).all<{ tipo: string; slug: string }>()).results;
-    usuario = { ...u, favoritos: { rios: favs.filter((f) => f.tipo === "rio").map((f) => f.slug), embalses: favs.filter((f) => f.tipo === "embalse").map((f) => f.slug) } };
+    usuario = {
+      ...u,
+      favoritos: {
+        rios: favs.filter((f) => f.tipo === "rio").map((f) => f.slug),
+        embalses: favs.filter((f) => f.tipo === "embalse").map((f) => f.slug),
+        estaciones: favs.filter((f) => f.tipo === "estacion").map((f) => f.slug),
+      },
+    };
   }
   c.header("Cache-Control", "no-store");
   return c.json({ usuario, necesitaConfiguracion: !hay });
@@ -403,18 +410,23 @@ app.put("/admin/embalses/orden", async (c) => {
   return c.json({ ok: true });
 });
 
-// ----- Ríos y embalses que sigue el usuario -----
+// ----- Ríos, embalses y estaciones que sigue el usuario -----
 
-/** Marca o desmarca un río o un embalse como seguido. */
+/** Marca o desmarca un río, un embalse o una estación como seguido. */
 app.put("/cuenta/favoritos", async (c) => {
   const u = c.get("usuario");
   const b = await cuerpo(c);
-  const tipo = b?.tipo === "rio" || b?.tipo === "embalse" ? b.tipo : null;
+  const tipo = b?.tipo === "rio" || b?.tipo === "embalse" || b?.tipo === "estacion" ? b.tipo : null;
   const slug = texto(b?.slug, 80);
   if (!tipo || !/^[a-z0-9-]+$/.test(slug)) return c.json({ error: "Petición no válida" }, 400);
   if (b?.seguir) {
-    const tabla = tipo === "rio" ? "aforos" : "embalses";
-    if (!(await c.env.DB.prepare(`SELECT 1 FROM ${tabla} WHERE slug = ?`).bind(slug).first())) return c.json({ error: "No existe" }, 404);
+    const consulta =
+      tipo === "rio"
+        ? "SELECT 1 FROM aforos WHERE slug = ?"
+        : tipo === "embalse"
+          ? "SELECT 1 FROM embalses WHERE slug = ?"
+          : "SELECT 1 FROM estaciones WHERE slug = ? AND publica = 1 AND activa = 1";
+    if (!(await c.env.DB.prepare(consulta).bind(slug).first())) return c.json({ error: "No existe" }, 404);
     await c.env.DB.prepare("INSERT OR IGNORE INTO favoritos (usuario_id, tipo, slug, creado) VALUES (?, ?, ?, unixepoch())").bind(u.id, tipo, slug).run();
   } else {
     await c.env.DB.prepare("DELETE FROM favoritos WHERE usuario_id = ? AND tipo = ? AND slug = ?").bind(u.id, tipo, slug).run();
@@ -480,10 +492,10 @@ app.put("/admin/aforos-orden", async (c) => {
   return c.json({ ok: true });
 });
 
-/** Lo que se ve por defecto (sin cuenta): marca o desmarca un río o un embalse. */
+/** Lo que se ve por defecto (sin cuenta): marca o desmarca un río, un embalse o una estación. */
 app.put("/admin/por-defecto", async (c) => {
   const b = await cuerpo(c);
-  const tabla = b?.tipo === "rio" ? "aforos" : b?.tipo === "embalse" ? "embalses" : null;
+  const tabla = b?.tipo === "rio" ? "aforos" : b?.tipo === "embalse" ? "embalses" : b?.tipo === "estacion" ? "estaciones" : null;
   const slug = texto(b?.slug, 80);
   if (!tabla || !/^[a-z0-9-]+$/.test(slug)) return c.json({ error: "Petición no válida" }, 400);
   await c.env.DB.prepare(`UPDATE ${tabla} SET destacado = ? WHERE slug = ?`).bind(b?.destacado ? 1 : 0, slug).run();

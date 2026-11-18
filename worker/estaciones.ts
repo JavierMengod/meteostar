@@ -11,6 +11,8 @@ export interface FilaEstacion {
   id: number;
   slug: string;
   usuario_id: number | null;
+  /** Se ve destacada por defecto (sin cuenta) */
+  destacado: number;
   tipo: "particular" | "oficial";
   red: string | null;
   nombre: string;

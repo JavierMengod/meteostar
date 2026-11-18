@@ -1,10 +1,11 @@
+import type { ReactNode } from "react";
 import type { RespuestaDatos } from "../../shared/tipos";
 import { puntoCardinal } from "../../shared/meteo";
 import { n } from "../formato";
 import { BarraMinMax, Directo, Tendencia } from "./Piezas";
 
 /** Tarjeta de una estación en la portada: temperatura, tendencia, mín./máx. del día y lo básico. */
-export default function TarjetaEstacion({ d, escala }: { d: RespuestaDatos; escala?: [number, number] }) {
+export default function TarjetaEstacion({ d, escala, accion }: { d: RespuestaDatos; escala?: [number, number]; accion?: ReactNode }) {
   const { estacion: e, actual: a, hoy } = d;
   const viento = a?.viento ?? null;
   const oficial = e.tipo === "oficial";
@@ -17,7 +18,10 @@ export default function TarjetaEstacion({ d, escala }: { d: RespuestaDatos; esca
             {e.municipio} · {e.altitud} m
           </p>
         </div>
-        <Directo lectura={a} ahora={d.ahora} />
+        <span className="te-acciones">
+          <Directo lectura={a} ahora={d.ahora} />
+          {accion}
+        </span>
       </div>
       {oficial && <span className="insignia">{e.red ?? "Oficial"} · datos horarios</span>}
       {a ? (

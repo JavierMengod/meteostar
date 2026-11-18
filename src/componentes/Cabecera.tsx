@@ -32,7 +32,7 @@ export function Logo() {
   );
 }
 
-export default function Cabecera({ ruta, estaciones }: { ruta: Ruta; estaciones: Estacion[] }) {
+export default function Cabecera({ ruta, principal }: { ruta: Ruta; principal: Estacion | null }) {
   const sesion = useSesion();
   const [abierto, setAbierto] = useState<string | null>(null);
   const [movil, setMovil] = useState(false);
@@ -51,25 +51,33 @@ export default function Cabecera({ ruta, estaciones }: { ruta: Ruta; estaciones:
     return () => document.removeEventListener("click", fuera);
   }, []);
 
-  const particulares = estaciones.filter((e) => e.tipo === "particular");
-  const oficiales = estaciones.filter((e) => e.tipo === "oficial");
-  const enlaceEstacion = (e: Estacion): Enlace => ({
-    href: `/estacion/${e.slug}`,
-    nombre: e.nombre,
-    detalle: e.tipo === "oficial" ? `${e.red ?? "Oficial"} · ${e.municipio}` : `${e.municipio} · ${e.altitud} m`,
-    activo: (r) => r.pagina === "estacion" && r.param === e.slug,
-  });
 
   const menu: (Enlace | Menu)[] = [
     { href: "/", nombre: "Principal", activo: (r) => r.pagina === "red" },
     {
       nombre: "Estaciones",
       enlaces: [
-        ...[...particulares, ...oficiales].map(enlaceEstacion),
+        // La estación de la web, directa; el resto, en «Todas las estaciones» (así el menú no crece con la red)
+        ...(principal
+          ? [
+              {
+                href: `/estacion/${principal.slug}`,
+                nombre: principal.nombre,
+                detalle: "La estación de la web, en directo",
+                activo: (r: Ruta) => r.pagina === "estacion" && r.param === principal.slug,
+              },
+            ]
+          : []),
+        {
+          href: "/estaciones",
+          nombre: "Todas las estaciones",
+          detalle: "Mapa y datos de la red",
+          activo: (r: Ruta) => r.pagina === "estaciones" || (r.pagina === "estacion" && r.param !== principal?.slug),
+        },
         sesion.usuario
           ? {
               href: "/cuenta/estacion/nueva",
-              nombre: "+ Añadir tu estación",
+              nombre: "Añade tu estación",
               detalle: "Súmala a la red",
               activo: (r: Ruta) => r.pagina === "editar-estacion" && r.param === "nueva",
               accion: true,

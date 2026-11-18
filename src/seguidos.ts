@@ -2,13 +2,13 @@
 import { useState } from "react";
 import { enviar, useSesion } from "./datos";
 
-export type TipoSeguido = "rio" | "embalse";
+export type TipoSeguido = "rio" | "embalse" | "estacion";
 
 export function useSeguidos(tipo: TipoSeguido, porDefecto: string[]) {
   const sesion = useSesion();
   const [ocupado, setOcupado] = useState<string | null>(null);
   const usuario = sesion.usuario;
-  const propios = usuario ? (tipo === "rio" ? usuario.favoritos.rios : usuario.favoritos.embalses) : [];
+  const propios = usuario ? (tipo === "rio" ? usuario.favoritos.rios : tipo === "embalse" ? usuario.favoritos.embalses : (usuario.favoritos.estaciones ?? [])) : [];
   return {
     usuario: !!usuario,
     /** Los que sigue el usuario (vacío si no ha elegido o no tiene cuenta) */

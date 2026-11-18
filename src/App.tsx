@@ -15,6 +15,7 @@ import RioDetalle from "./paginas/RioDetalle";
 import Estacion from "./paginas/Estacion";
 import { Dias, PorHoras, type OpcionLugar } from "./paginas/Prevision";
 import Red from "./paginas/Red";
+import Estaciones from "./paginas/Estaciones";
 import { Radar, Satelite } from "./paginas/Seguimiento";
 
 export default function App() {
@@ -45,6 +46,9 @@ export default function App() {
   switch (ruta.pagina) {
     case "red":
       pagina = <Red red={red} prevision={prevision} />;
+      break;
+    case "estaciones":
+      pagina = <Estaciones red={red} />;
       break;
     case "estacion":
       pagina = <Estacion key={ruta.param} slug={ruta.param!} prevision={prevision} />;
@@ -105,7 +109,7 @@ export default function App() {
   return (
     <Sesion.Provider value={sesion}>
       <TemaContexto.Provider value={tema}>
-        <Cabecera ruta={ruta} estaciones={red?.estaciones.map((d) => d.estacion) ?? []} />
+        <Cabecera ruta={ruta} principal={red?.estaciones.find((d) => d.estacion.slug === red.porDefecto[0])?.estacion ?? null} />
         <main className="contenido">{pagina}</main>
         <Pie red={red} usuario={sesion.usuario} />
       </TemaContexto.Provider>
