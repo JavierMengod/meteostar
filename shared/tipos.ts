@@ -531,7 +531,7 @@ export type DiaAforo = [string, number | null, "a" | "m"];
 /** Estación de otra red (Meteoclimatic o Weather Underground) en el mapa. */
 export interface EstacionExterna {
   codigo: string;
-  fuente: "meteoclimatic" | "wunderground";
+  fuente: "meteoclimatic" | "wunderground" | "aemet";
   nombre: string;
   lat: number;
   lon: number;

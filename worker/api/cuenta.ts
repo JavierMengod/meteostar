@@ -424,7 +424,7 @@ app.post("/admin/externas/cruzar", async (c) => {
 async function altaExterna(c: any) {
   const b = await cuerpo(c);
   const codigo = texto(b?.codigo, 30).toUpperCase();
-  const fuente = b?.fuente === "wunderground" ? "wunderground" : "meteoclimatic";
+  const fuente = b?.fuente === "wunderground" ? "wunderground" : b?.fuente === "aemet" ? "aemet" : "meteoclimatic";
   const u = c.get("usuario") as Usuario;
   const r = await anadirExterna(c.env, { id: u.id, rol: u.rol }, fuente, codigo);
   if ("error" in r) return c.json(r, 400);
@@ -432,8 +432,12 @@ async function altaExterna(c: any) {
   const f = await estacionPorSlug(c.env.DB, r.slug);
   if (f) {
     const t = ahora();
-    await leerEstacion(c.env, f, t).catch((e) => console.error("primera lectura", e));
-    await c.env.DB.prepare("UPDATE estaciones SET ultima_consulta = ? WHERE id = ?").bind(t, f.id).run();
+    // Si falla (p. ej. la red pide una pausa), no se apunta como leída: la tarea de cada minuto la reintenta enseguida
+    const ok = await leerEstacion(c.env, f, t).then(
+      () => true,
+      (e) => (console.error("primera lectura", e), false),
+    );
+    if (ok) await c.env.DB.prepare("UPDATE estaciones SET ultima_consulta = ? WHERE id = ?").bind(t, f.id).run();
   }
   return c.json(r);
 }

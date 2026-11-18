@@ -20,7 +20,7 @@ import { leerEnvioConsola } from "../ecowitt";
 import { datosEstacion, estacionesPublicas, estacionPorSlug, estacionPorToken, type FilaEstacion } from "../estaciones";
 import { fechaAnterior, fechaLocal, inicioDia } from "../fechas";
 import { detalleEmbalse, estadoEmbalses } from "../embalses";
-import { catalogoExternas, catalogoWU } from "../externas";
+import { catalogoAemet, catalogoExternas, catalogoWU } from "../externas";
 import { CUPO_FICHAS, observacionWU, resumenObservacion } from "../wunderground";
 import { PROVINCIAS_MC } from "../meteoclimatic";
 import { obtenerPrevision } from "../prevision";
@@ -97,6 +97,12 @@ app.get("/estaciones/meteoclimatic", async (c) => {
     console.error(e);
     return c.json({ error: "No se ha podido leer Meteoclimatic" }, 502);
   }
+});
+
+/** Estaciones de AEMET de la zona, con su último dato (horario). */
+app.get("/estaciones/aemet", async (c) => {
+  c.header("Cache-Control", "public, max-age=600");
+  return c.json(await catalogoAemet(c.env.DB));
 });
 
 /** Estaciones de Weather Underground de la zona (nombre y posición; la lista se renueva una vez al día). */

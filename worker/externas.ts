@@ -34,7 +34,7 @@ async function cruceDe(db: D1Database, red: "meteoclimatic" | "wunderground") {
 }
 
 type Fuente = EstacionExterna["fuente"];
-const COLUMNA: Record<Fuente, "meteoclimatic" | "wunderground"> = { meteoclimatic: "meteoclimatic", wunderground: "wunderground" };
+const COLUMNA: Record<Fuente, "meteoclimatic" | "wunderground" | "aemet"> = { meteoclimatic: "meteoclimatic", wunderground: "wunderground", aemet: "aemet" };
 
 /** Estaciones de Meteostar con código en esa red: código → estación. */
 async function yaEnMeteostar(db: D1Database, fuente: Fuente) {
@@ -58,6 +58,27 @@ export async function catalogoExternas(db: D1Database, region: string): Promise<
     enMeteostar: enRed.get(e.codigo) ?? null,
     gemela: gemelas.get(e.codigo) ?? null,
     aviso: avisos.get(e.codigo) ?? null,
+  }));
+}
+
+/** Estaciones de AEMET de la zona, con su último dato (se refresca poco a poco, ver aemet.ts). */
+export async function catalogoAemet(db: D1Database): Promise<EstacionExterna[]> {
+  const enRed = await yaEnMeteostar(db, "aemet");
+  const filas = (
+    await db
+      .prepare("SELECT idema, nombre, lat, lon, t, temp FROM aemet WHERE visto > unixepoch() - 60 * 86400 ORDER BY nombre")
+      .all<{ idema: string; nombre: string; lat: number; lon: number; t: number | null; temp: number | null }>()
+  ).results;
+  return filas.map((f) => ({
+    codigo: f.idema,
+    fuente: "aemet",
+    nombre: f.nombre,
+    lat: f.lat,
+    lon: f.lon,
+    t: f.t,
+    temp: f.temp,
+    qos: null,
+    enMeteostar: enRed.get(f.idema.toUpperCase()) ?? null,
   }));
 }
 
@@ -121,14 +142,20 @@ export async function anadirExterna(env: Env, quien: QuienDaDeAlta, fuenteElegid
     .bind(codigo, gemela)
     .first<{ slug: string }>();
   if (ya) return { error: "Esa estación ya está en Meteostar" };
-  // Límite por usuario
+  // Límite por usuario (las de otras redes y las de AEMET que haya dado de alta)
   if (quien.rol !== "admin") {
-    const suyas = await env.DB.prepare("SELECT count(*) AS n FROM estaciones WHERE tipo = 'externa' AND usuario_id = ?").bind(quien.id).first<number>("n");
+    const suyas = await env.DB.prepare("SELECT count(*) AS n FROM estaciones WHERE tipo IN ('externa', 'oficial') AND usuario_id = ?").bind(quien.id).first<number>("n");
     if ((suyas ?? 0) >= MAX_EXTERNAS_USUARIO) return { error: `Puedes dar de alta como mucho ${MAX_EXTERNAS_USUARIO} estaciones de otras redes. Quita alguna desde tu cuenta para añadir otra.` };
   }
 
-  let datos: { nombre: string; lat: number; lon: number; provincia: string; config: Record<string, string> };
-  if (fuente === "meteoclimatic") {
+  let datos: { nombre: string; lat: number; lon: number; provincia: string; config: Record<string, string>; altitud?: number | null };
+  if (fuente === "aemet") {
+    const e = await env.DB.prepare("SELECT idema, nombre, provincia, lat, lon, alt FROM aemet WHERE idema = ?")
+      .bind(codigo)
+      .first<{ idema: string; nombre: string; provincia: string | null; lat: number; lon: number; alt: number | null }>();
+    if (!e) return { error: "Esa estación no está en la lista de AEMET" };
+    datos = { nombre: e.nombre, lat: e.lat, lon: e.lon, provincia: e.provincia ?? "Teruel", config: { idema: e.idema }, altitud: e.alt };
+  } else if (fuente === "meteoclimatic") {
     const region = regionDe(codigo);
     const e =
       (await catalogoProvincia(region)).find((x) => x.codigo === codigo) ??
@@ -144,15 +171,15 @@ export async function anadirExterna(env: Env, quien: QuienDaDeAlta, fuenteElegid
     datos = { nombre: e.nombre, lat: e.lat, lon: e.lon, provincia: "Teruel", config: { estacion: e.codigo } };
   }
   const id = await crearEstacion(env.DB, quien.id, {
-    tipo: "externa",
-    red: fuente === "meteoclimatic" ? "Meteoclimatic" : "Weather Underground",
+    tipo: fuente === "aemet" ? "oficial" : "externa",
+    red: fuente === "aemet" ? "AEMET" : fuente === "meteoclimatic" ? "Meteoclimatic" : "Weather Underground",
     nombre: datos.nombre,
     // «Albarracín - Dornaque»: el pueblo es lo de antes del guion
     municipio: datos.nombre.split(" - ")[0].trim(),
     provincia: datos.provincia,
     lat: datos.lat,
     lon: datos.lon,
-    altitud: await altitudDe(datos.lat, datos.lon),
+    altitud: datos.altitud ?? (await altitudDe(datos.lat, datos.lon)),
     descripcion: null,
     equipo: null,
     meteoclimatic: fuente === "meteoclimatic" ? codigo : null,
@@ -162,6 +189,7 @@ export async function anadirExterna(env: Env, quien: QuienDaDeAlta, fuenteElegid
     activa: 1,
   });
   if (fuente === "wunderground") await env.DB.prepare("UPDATE estaciones SET wunderground = ? WHERE id = ?").bind(codigo, id).run();
+  if (fuente === "aemet") await env.DB.prepare("UPDATE estaciones SET aemet = ? WHERE id = ?").bind(codigo, id).run();
   // Histórico de Weather Underground: el de la propia estación o, si es de Meteoclimatic, el de su gemela (si la tiene)
   const deHistorico =
     fuente === "wunderground"
@@ -181,7 +209,9 @@ export async function anadirExterna(env: Env, quien: QuienDaDeAlta, fuenteElegid
  */
 export async function quitarExterna(db: D1Database, codigo: string, quien: QuienDaDeAlta): Promise<true | { error: string }> {
   const f = await db
-    .prepare("SELECT id, usuario_id FROM estaciones WHERE tipo = 'externa' AND (upper(meteoclimatic) = ?1 OR upper(wunderground) = ?1)")
+    .prepare(
+      "SELECT id, usuario_id FROM estaciones WHERE tipo IN ('externa', 'oficial') AND (upper(meteoclimatic) = ?1 OR upper(wunderground) = ?1 OR upper(aemet) = ?1)",
+    )
     .bind(codigo)
     .first<{ id: number; usuario_id: number | null }>();
   if (!f) return { error: "No está en Meteostar" };

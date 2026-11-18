@@ -19,9 +19,13 @@ const quitarAcentos = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").
 
 /** Color de los puntos de Weather Underground (su dato solo se pide al pulsarlos) */
 const COLOR_AL_PULSAR = "#8c97a8";
-const NOMBRE_RED = { meteoclimatic: "Meteoclimatic", wunderground: "Weather Underground" } as const;
+const NOMBRE_RED = { meteoclimatic: "Meteoclimatic", wunderground: "Weather Underground", aemet: "AEMET" } as const;
 const enlaceRed = (e: EstacionExterna) =>
-  e.fuente === "meteoclimatic" ? `https://www.meteoclimatic.net/perfil/${e.codigo}` : `https://www.wunderground.com/dashboard/pws/${e.codigo}`;
+  e.fuente === "meteoclimatic"
+    ? `https://www.meteoclimatic.net/perfil/${e.codigo}`
+    : e.fuente === "aemet"
+      ? `https://www.aemet.es/es/eltiempo/observacion/ultimosdatos?l=${e.codigo}`
+      : `https://www.wunderground.com/dashboard/pws/${e.codigo}`;
 
 /** Estaciones de otras redes que puede dar de alta cada usuario (igual que en el servidor) */
 const MAX_EXTERNAS_USUARIO = 5;
@@ -241,15 +245,25 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
     [estaciones, q, tipo],
   );
   const { datos: listaWU } = usePeticion<EstacionExterna[]>("/api/estaciones/wunderground", 60 * 60_000);
+  // Las oficiales de AEMET de la zona, con su último dato (horario)
+  const { datos: listaAemet } = usePeticion<EstacionExterna[]>("/api/estaciones/aemet", 10 * 60_000);
   const libres = useMemo(() => {
     const mc = (catalogo ?? []).filter((e) => !e.enMeteostar);
     // Para quitar de Weather Underground las que ya salen por Meteoclimatic o están en Meteostar
     // Las de Weather Underground que son la misma estación que una de Meteoclimatic (gemelas comprobadas) no se repiten:
     // queda la de Meteoclimatic, que no gasta peticiones
     const wu = (listaWU ?? []).filter((e) => !e.enMeteostar && !e.gemela);
-    return [...mc, ...wu.map((e) => (pedidos[e.codigo] ? { ...e, ...pedidos[e.codigo] } : e))];
-  }, [catalogo, listaWU, estaciones, pedidos]);
-  const libresFiltradas = useMemo(() => libres.filter((e) => (!tipo || tipo === "externa") && (!q || quitarAcentos(e.nombre).includes(q))), [libres, q, tipo]);
+    const aemet = (listaAemet ?? []).filter((e) => !e.enMeteostar);
+    return [...aemet, ...mc, ...wu.map((e) => (pedidos[e.codigo] ? { ...e, ...pedidos[e.codigo] } : e))];
+  }, [catalogo, listaWU, listaAemet, estaciones, pedidos]);
+  // Filtro por tipo: las de AEMET van con las oficiales; las demás, con «otras redes»
+  const libresFiltradas = useMemo(
+    () =>
+      libres.filter(
+        (e) => (!tipo || tipo === (e.fuente === "aemet" ? "oficial" : "externa")) && (!q || quitarAcentos(`${e.nombre} ${NOMBRE_RED[e.fuente]}`).includes(q)),
+      ),
+    [libres, q, tipo],
+  );
   if (!red) return <Cargando />;
   const { ahora } = red;
 
@@ -360,6 +374,7 @@ export default function Estaciones({ red }: { red: RespuestaRed | null }) {
                 href: `${e.fuente}:${e.codigo}`,
                 color: e.fuente === "wunderground" && e.temp === null ? COLOR_AL_PULSAR : colorTemp(e.temp),
                 atenuado: true,
+                oficial: e.fuente === "aemet",
                 // Las de Weather Underground sin dato (hasta que se pulsan): pequeñas y por debajo de las que sí lo tienen
                 discreto: e.temp === null,
                 fijo: e.codigo === elegida,
