@@ -76,6 +76,8 @@ export default function EditorEstacion({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [prueba, setPrueba] = useState<{ ok: boolean; texto: string } | null>(null);
+  // Importación del histórico de ecowitt.net (los hooks, antes de cualquier return)
+  const [importacion, setImportacion] = useState<{ ok: boolean; texto: string; enCurso: boolean } | null>(null);
 
   useEffect(() => {
     if (sesion.cargada && !sesion.usuario) navegar("/entrar", true);
@@ -133,7 +135,6 @@ export default function EditorEstacion({ id }: { id: string }) {
   };
 
   // Importación del histórico de ecowitt.net, por tramos de unos días
-  const [importacion, setImportacion] = useState<{ ok: boolean; texto: string; enCurso: boolean } | null>(null);
   const importar = async () => {
     if (!(await guardar())) return;
     type Tramo = { desde: string; hechos: { fecha: string; lecturas: number }[]; siguiente: string | null; ultimo: string; error?: string };
