@@ -42,3 +42,20 @@ En producción, **después** de crear Villastar (slug `villastar`) e importar su
 ```
 npx wrangler d1 execute meteostar --remote --file datos/hoja-villastar.sql
 ```
+
+# Días de la hoja completados con Weather Underground
+
+`wu-villastar.sql`: completa los días de la hoja (`origen = 'hoja'`) con las lecturas de Weather Underground, generado
+con `scripts/completar-wu.mjs`:
+
+- Del 30/10/2025 al 26/4/2026, de **IVILLA1897** (la misma estación que la actual): todos los datos con hora, salvo la
+  lluvia, que se queda la de la hoja (ya comprobada). Quedan con `origen = 'wu'`.
+- Del 26/1/2025 al 29/10/2025, de **IVILLA1699** (la estación anterior, de la que salen esos días de la hoja): solo lo
+  que le falta a la hoja (humedad, presión, radiación, UV, intensidad y la hora de los extremos si coinciden). Quedan
+  con `origen = 'hoja+wu'`.
+
+Solo toca días con `origen = 'hoja'`: se carga **después** de `hoja-villastar.sql`.
+
+```
+npx wrangler d1 execute meteostar --remote --file datos/wu-villastar.sql
+```
