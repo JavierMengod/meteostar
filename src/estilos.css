@@ -3860,3 +3860,40 @@ h3 {
   margin-top: 2px;
   border-width: 1.5px;
 }
+
+/* Lista de ríos: cada cuenca se abre y se cierra */
+.lista-rios summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 0;
+}
+.lista-rios summary::-webkit-details-marker {
+  display: none;
+}
+.lista-rios summary::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--estrella);
+  border-bottom: 2px solid var(--estrella);
+  transform: translateY(-3px) rotate(-45deg);
+  transition: transform 0.15s;
+  align-self: center;
+}
+.lista-rios[open] summary::before {
+  transform: translateY(-3px) rotate(45deg);
+}
+.lista-rios[open] summary {
+  margin-bottom: 8px;
+}
+.titulo-grupo {
+  flex: 1;
+  font-family: var(--f-titulo);
+  font-weight: 600;
+  font-size: 1.3rem;
+}

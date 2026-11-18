@@ -120,6 +120,25 @@ function FilaRio({ a, seg }: { a: Aforo; seg: Seguidos }) {
   );
 }
 
+/** Un grupo de la lista (una cuenca, o los barrancos) que se abre y se cierra. */
+function GrupoRios({ titulo, lista, seg, abierto, onCambio }: { titulo: string; lista: Aforo[]; seg: Seguidos; abierto: boolean; onCambio: (abierto: boolean) => void }) {
+  const avisos = lista.filter((a) => situacionAforo(a).aviso >= 0).length;
+  return (
+    <details className="tarjeta lista-rios" open={abierto} onToggle={(e) => onCambio((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary>
+        <span className="titulo-grupo">{titulo}</span>
+        <span className="suave pequeno">
+          {lista.length} {lista.length === 1 ? "aforo" : "aforos"}
+          {avisos > 0 && ` · ${avisos} con aviso`}
+        </span>
+      </summary>
+      {lista.map((a) => (
+        <FilaRio key={a.slug} a={a} seg={seg} />
+      ))}
+    </details>
+  );
+}
+
 /** Barrancos y ramblas van en su propio grupo, aparte de los ríos de cada cuenca. */
 const BARRANCOS = "Barrancos y ramblas";
 
@@ -131,6 +150,8 @@ export default function Rios() {
   const admin = useSesion().usuario?.rol === "admin";
   const [busca, setBusca] = useState("");
   const [cuenca, setCuenca] = useState("");
+  // Grupos abiertos a mano; al buscar o filtrar por cuenca se abren todos los que tengan resultados
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
   const aforos = datos?.aforos ?? [];
   const cuencas = useMemo(() => [...new Set(aforos.map((a) => a.confederacion ?? "Otras"))].sort((a, b) => a.localeCompare(b, "es")), [aforos]);
   const filtrados = useMemo(() => {
@@ -228,12 +249,21 @@ export default function Rios() {
 
       {porCuenca.length ? (
         porCuenca.map(([c, lista]) => (
-          <section key={c} className="tarjeta lista-rios">
-            <h3 className="titulo-acento">{c === BARRANCOS ? c : `Cuenca del ${c}`}</h3>
-            {lista.map((a) => (
-              <FilaRio key={a.slug} a={a} seg={seg} />
-            ))}
-          </section>
+          <GrupoRios
+            key={c}
+            titulo={c === BARRANCOS ? c : `Cuenca del ${c}`}
+            lista={lista}
+            seg={seg}
+            abierto={!!busca.trim() || !!cuenca || abiertos.has(c)}
+            onCambio={(abierto) =>
+              setAbiertos((prev) => {
+                const nuevo = new Set(prev);
+                if (abierto) nuevo.add(c);
+                else nuevo.delete(c);
+                return nuevo;
+              })
+            }
+          />
         ))
       ) : (
         <p className="vacio">{aforos.length ? "Ningún río coincide con la búsqueda." : "Todavía no hay ríos configurados."}</p>
