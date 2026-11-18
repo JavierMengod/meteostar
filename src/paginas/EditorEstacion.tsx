@@ -95,7 +95,8 @@ export default function EditorEstacion({ id }: { id: string }) {
   const con = conectores.find((c) => c.id === f.fuente);
   const poner = (cambios: Partial<Formulario>) => setF({ ...f, ...cambios });
 
-  const guardar = async () => {
+  /** Guarda el formulario. Devuelve true si se ha guardado. */
+  const guardar = async (): Promise<boolean> => {
     setError(null);
     setOcupado(true);
     try {
@@ -106,15 +107,22 @@ export default function EditorEstacion({ id }: { id: string }) {
       setEstacion(r);
       setF(deEstacion(r));
       if (nueva) navegar(`/cuenta/estacion/${r.id}?creada=1`, true);
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setOcupado(false);
     }
   };
 
   const probar = async () => {
-    setPrueba({ ok: true, texto: "Leyendo la estación…" });
+    // Se prueba lo que hay en el formulario: primero se guarda (si no, se probarían las claves de antes)
+    setPrueba({ ok: true, texto: "Guardando y leyendo la estación…" });
+    if (!(await guardar())) {
+      setPrueba({ ok: false, texto: "No se ha podido guardar: revisa el aviso de abajo." });
+      return;
+    }
     type Prueba = { ok: boolean; error?: string; nuevas?: number; ultima?: { ts: number; temp: number | null } };
     const r: Prueba = await enviar<Prueba>(`/api/cuenta/estaciones/${id}/probar`, "POST").catch((e) => ({ ok: false, error: String(e.message) }));
     setPrueba(
@@ -245,7 +253,7 @@ export default function EditorEstacion({ id }: { id: string }) {
         </button>
         {!nueva && con?.modo === "consulta" && (
           <button className="boton-secundario" onClick={probar}>
-            Probar ahora
+            Guardar y probar
           </button>
         )}
         {!nueva && (

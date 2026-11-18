@@ -64,6 +64,7 @@ async function pedirJson(url: string, init?: RequestInit): Promise<any> {
 // ----- ecowitt.net -----
 
 async function leerEcowitt(config: Record<string, string>, ahora: number): Promise<ResultadoLectura> {
+  if (!config.application_key || !config.api_key || !config.mac) throw new Error("Faltan las claves de ecowitt.net (Application Key, API Key y MAC)");
   const j = await pedirJson(urlApiEcowitt(config.application_key, config.api_key, config.mac));
   const l = leerRespuestaApi(j, ahora);
   if (!l) throw new Error(`ecowitt.net: ${j?.msg ?? "respuesta no válida"}`);
