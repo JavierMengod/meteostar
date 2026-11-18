@@ -224,7 +224,7 @@ export default function Rios() {
             alto={420}
             margen={0.05}
             pequeno
-            agrupar={filtrados.length > 8}
+            soloFijos={filtrados.length > 8}
             puntos={filtrados.map((a) => {
               const v = valor(a);
               return {
