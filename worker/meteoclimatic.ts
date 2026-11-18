@@ -93,3 +93,95 @@ export async function catalogoProvincia(region: string): Promise<EstacionMC[]> {
   }
   return lista;
 }
+
+// ----- Lista guardada de estaciones (las que salen y entran del feed de la provincia) -----
+
+/** Provincias cuya lista se guarda (las que se enseñan en el mapa de Estaciones). */
+export const PROVINCIAS_GUARDADAS = ["ESARA44"];
+
+/** Estaciones de una provincia: la lista guardada, refrescada con el feed como mucho cada 10 minutos. */
+export async function catalogoGuardado(db: D1Database, region: string): Promise<EstacionMC[]> {
+  const ultima = await db.prepare("SELECT max(visto) AS visto FROM meteoclimatic WHERE region = ?").bind(region).first<number>("visto");
+  if (!ultima || Date.now() / 1000 - ultima > 600) {
+    try {
+      const lista = await catalogoProvincia(region);
+      const ahora = Math.floor(Date.now() / 1000);
+      const sql = db.prepare(
+        `INSERT INTO meteoclimatic (codigo, region, nombre, lat, lon, t, temp, qos, visto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (codigo) DO UPDATE SET nombre = excluded.nombre, lat = excluded.lat, lon = excluded.lon, t = excluded.t,
+           temp = excluded.temp, qos = excluded.qos, visto = excluded.visto`,
+      );
+      if (lista.length) await db.batch(lista.map((e) => sql.bind(e.codigo, region, e.nombre, e.lat, e.lon, e.t, e.temp, e.qos, ahora)));
+    } catch (e) {
+      // Si Meteoclimatic no responde, se enseña lo guardado
+      console.error("catálogo Meteoclimatic", e);
+    }
+  }
+  return (await db.prepare("SELECT codigo, nombre, lat, lon, t, temp, qos FROM meteoclimatic WHERE region = ? ORDER BY nombre").bind(region).all<EstacionMC>()).results;
+}
+
+// ----- Una estación suelta (si no sale en el feed de su provincia) -----
+
+/** Valores del RSS de una estación (el XML de una estación sola a veces sale vacío; el RSS no). */
+export interface ValoresRss {
+  t: number | null;
+  temp: number | null;
+  tmax: number | null;
+  tmin: number | null;
+  hum: number | null;
+  hum_max: number | null;
+  hum_min: number | null;
+  presion: number | null;
+  presion_max: number | null;
+  presion_min: number | null;
+  viento: number | null;
+  racha_max: number | null;
+  dir: number | null;
+  lluvia: number | null;
+}
+
+const numEs = (s: string | undefined) => {
+  if (!s) return null;
+  const v = Number(s.replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(v) ? v : null;
+};
+
+/** Lee el texto del RSS de una estación («Temperatura: 18,2 ºC (Máx.: 18,2 / Mín.: 15,2)…»). */
+export function leerRssEstacion(rss: string): ValoresRss | null {
+  const item = rss.match(/<item>([\s\S]*?)<\/item>/)?.[1];
+  if (!item) return null;
+  const texto = desHtml(item.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
+  const tras = (etiqueta: string) => texto.match(new RegExp(String.raw`${etiqueta}:\s*(-?[\d.,]+)[^(]*\(\s*Máx\.:\s*(-?[\d.,]+)(?:\s*/\s*Mín\.:\s*(-?[\d.,]+))?`, "i"));
+  const t = tras("Temperatura"), h = tras("Humedad"), p = tras("Barómetro"), v = tras("Viento");
+  const fecha = Date.parse(item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1] ?? "");
+  return {
+    t: Number.isNaN(fecha) ? null : fecha / 1000,
+    temp: numEs(t?.[1]),
+    tmax: numEs(t?.[2]),
+    tmin: numEs(t?.[3]),
+    hum: numEs(h?.[1]),
+    hum_max: numEs(h?.[2]),
+    hum_min: numEs(h?.[3]),
+    presion: numEs(p?.[1]),
+    presion_max: numEs(p?.[2]),
+    presion_min: numEs(p?.[3]),
+    viento: numEs(v?.[1]),
+    racha_max: numEs(v?.[2]),
+    dir: numEs(texto.match(/Dirección del viento:\s*(\d+)/i)?.[1]),
+    lluvia: numEs(texto.match(/Precip\.:\s*([\d.,]+)/i)?.[1]),
+  };
+}
+
+/** RSS de una estación (9 minutos en caché). */
+export async function rssEstacion(codigo: string): Promise<string> {
+  const url = `https://www.meteoclimatic.net/feed/rss/${codigo}`;
+  const cache = caches.default;
+  const clave = new Request(url);
+  const guardada = await cache.match(clave);
+  if (guardada) return guardada.text();
+  const r = await fetch(url, { headers: { "User-Agent": AGENTE }, signal: AbortSignal.timeout(20_000) });
+  if (!r.ok) throw new Error(`Meteoclimatic HTTP ${r.status}`);
+  const texto = await textoLatin(r);
+  await cache.put(clave, new Response(texto, { headers: { "Cache-Control": "public, max-age=540", "Content-Type": "text/xml; charset=utf-8" } }));
+  return texto;
+}

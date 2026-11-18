@@ -4,7 +4,7 @@ import type { InfoConector, Lectura } from "../shared/tipos";
 import { puntoRocio, redondear, sensacionTermica } from "../shared/meteo";
 import { leerRespuestaApi, urlApiEcowitt } from "./ecowitt";
 import { fechaLocal } from "./fechas";
-import { bloqueEstacion, feedProvincia, regionDe } from "./meteoclimatic";
+import { bloqueEstacion, feedProvincia, leerRssEstacion, regionDe, rssEstacion } from "./meteoclimatic";
 
 /** Extremos del día que da la propia fuente (por si las lecturas no los recogen todos). */
 export interface ExtremosDia {
@@ -148,7 +148,17 @@ async function leerMC(config: Record<string, string>): Promise<ResultadoLectura>
   const codigo = config.codigo.trim().toUpperCase();
   if (!/^[A-Z0-9]{10,25}$/.test(codigo)) throw new Error("Código de Meteoclimatic no válido");
   // El feed de la provincia: una petición para todas sus estaciones, en caché unos minutos
-  return leerMeteoclimatic(await feedProvincia(regionDe(codigo)), codigo);
+  const provincia = await feedProvincia(regionDe(codigo));
+  if (bloqueEstacion(provincia, codigo)) return leerMeteoclimatic(provincia, codigo);
+  // No sale en el de la provincia (solo trae las que han enviado hace poco): su propio RSS
+  const v = leerRssEstacion(await rssEstacion(codigo));
+  if (!v || v.t === null) throw new Error("Meteoclimatic: la estación no tiene datos ahora mismo");
+  return {
+    lecturas: [
+      lecturaCompleta({ ts: v.t, fuente: "meteoclimatic", temp: v.temp, hum: v.hum, presion: v.presion, viento: v.viento, dir: v.dir, lluvia_dia: v.lluvia }),
+    ],
+    extremos: { tmax: v.tmax, tmin: v.tmin, hum_max: v.hum_max, hum_min: v.hum_min, presion_max: v.presion_max, presion_min: v.presion_min, racha_max: v.racha_max },
+  };
 }
 
 // ----- AEMET OpenData (estaciones oficiales) -----

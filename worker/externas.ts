@@ -3,11 +3,12 @@
 import type { EstacionExterna } from "../shared/tipos";
 import { cifrar } from "./cifrado";
 import { crearEstacion } from "./estaciones";
-import { PROVINCIAS_MC, catalogoProvincia, regionDe } from "./meteoclimatic";
+import { PROVINCIAS_GUARDADAS, PROVINCIAS_MC, catalogoGuardado, catalogoProvincia, regionDe } from "./meteoclimatic";
 
 /** Estaciones de una provincia de Meteoclimatic, marcando las que ya están en Meteostar. */
 export async function catalogoExternas(db: D1Database, region: string): Promise<EstacionExterna[]> {
-  const lista = await catalogoProvincia(region);
+  // Las provincias del mapa de Estaciones, de la lista guardada (incluye las que ahora no salen en el feed)
+  const lista = PROVINCIAS_GUARDADAS.includes(region) ? await catalogoGuardado(db, region) : await catalogoProvincia(region);
   // Ya en Meteostar: las añadidas desde aquí (externas) y las de la red que publican en Meteoclimatic (como Villastar)
   const enRed = new Map(
     (await db.prepare("SELECT slug, nombre, tipo, upper(meteoclimatic) AS codigo FROM estaciones WHERE meteoclimatic IS NOT NULL").all<{ slug: string; nombre: string; tipo: string; codigo: string }>())
@@ -33,7 +34,9 @@ async function altitudDe(lat: number, lon: number): Promise<number> {
 export async function anadirExterna(env: Env, adminId: number, codigo: string): Promise<{ slug: string } | { error: string }> {
   if (!/^[A-Z0-9]{10,25}$/.test(codigo)) return { error: "Código no válido" };
   const region = regionDe(codigo);
-  const e = (await catalogoProvincia(region)).find((x) => x.codigo === codigo);
+  const e =
+    (await catalogoProvincia(region)).find((x) => x.codigo === codigo) ??
+    (PROVINCIAS_GUARDADAS.includes(region) ? (await catalogoGuardado(env.DB, region)).find((x) => x.codigo === codigo) : undefined);
   if (!e) return { error: "Esa estación no está en Meteoclimatic" };
   const ya = await env.DB.prepare("SELECT slug FROM estaciones WHERE upper(meteoclimatic) = ?").bind(codigo).first<{ slug: string }>();
   if (ya) return { error: "Esa estación ya está en Meteostar" };

@@ -3,6 +3,7 @@ import { comprobarContrasena, contrasenaValida, emailValido, hashContrasena } fr
 import { leerMeteoclimatic, leerObservacionesAemet, leerWunderground } from "../worker/conectores";
 import { leerEnvioConsola } from "../worker/ecowitt";
 import { slugDe } from "../worker/estaciones";
+import { leerRssEstacion } from "../worker/meteoclimatic";
 
 describe("Meteoclimatic", () => {
   const xml = `<?xml version="1.0" encoding="ISO-8859-15"?><meteodata><stations><station>
@@ -109,5 +110,35 @@ describe("cuentas", () => {
     expect(slugDe("Villastar - Vega del Turia")).toBe("villastar-vega-del-turia");
     expect(slugDe("Cañada de Benatanduz")).toBe("canada-de-benatanduz");
     expect(slugDe("¡¡¡")).toBe("estacion");
+  });
+});
+
+describe("Meteoclimatic: RSS de una estación", () => {
+  const rss = `<rss><channel><item><title>Rubielos de Mora (Teruel)</title><pubDate>Wed, 18 Nov 2026 09:55:00 +0000</pubDate>
+    <description><![CDATA[<ul><li>Actualizado: 18-11-2026 09:55 UTC</li>
+    <li>Temperatura: <b>18,2</b> &#186;C ( M&#225;x.: <b>18,2</b> / M&#237;n.: <b>15,2</b> )</li>
+    <li>Humedad: <b>72,0</b> % ( M&#225;x.: <b>77,0</b> / M&#237;n.: <b>64,0</b> )</li>
+    <li>Bar&#243;metro: <b>1008,1</b> hPa ( M&#225;x.: <b>1009,1</b> / M&#237;n.: <b>1007,1</b> )</li>
+    <li>Viento: <b>16,0</b> km/h ( M&#225;x.: <b>55,0</b> )</li>
+    <li>Direcci&#243;n del viento: <b>265</b> - W</li><li>Precip.: <b>0,4</b> mm</li></ul>]]></description></item></channel></rss>`;
+
+  it("lee los valores del texto del RSS", () => {
+    expect(leerRssEstacion(rss)).toMatchObject({
+      t: Date.UTC(2026, 10, 18, 9, 55) / 1000,
+      temp: 18.2,
+      tmax: 18.2,
+      tmin: 15.2,
+      hum: 72,
+      presion: 1008.1,
+      presion_min: 1007.1,
+      viento: 16,
+      racha_max: 55,
+      dir: 265,
+      lluvia: 0.4,
+    });
+  });
+
+  it("devuelve null si no hay estación", () => {
+    expect(leerRssEstacion("<rss><channel></channel></rss>")).toBeNull();
   });
 });
