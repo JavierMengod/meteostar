@@ -1,6 +1,7 @@
 // API de cuentas: acceso, invitaciones, mis estaciones, mis ubicaciones y administración.
 import { Hono } from "hono";
-import { avanzarHistoricoAemet } from "../aemet";
+import { avanzarImportaciones, encolarImportacion, estadoImportacion } from "../importaciones";
+import { fechaLocal } from "../fechas";
 import type { Invitacion, RespuestaCuenta, Ubicacion } from "../../shared/tipos";
 import {
   aleatorio,
@@ -34,7 +35,7 @@ import {
 import { ahora } from "./publica";
 import { anadirExterna, catalogoExternas, quitarExterna } from "../externas";
 import { comprobarCruce } from "../cruce";
-import { importarTramo, primerDiaEcowitt } from "../importar-ecowitt";
+import { clavesEcowitt, primerDiaEcowitt } from "../importar-ecowitt";
 import { PROVINCIAS_MC } from "../meteoclimatic";
 
 type Entorno = { Bindings: Env; Variables: { usuario: Usuario } };
@@ -302,19 +303,28 @@ app.post("/cuenta/estaciones/:id/probar", async (c) => {
 });
 
 /**
- * Importa el histórico de ecowitt.net, por tramos de unos días (la página va llamando hasta acabar).
- * Sin «desde», empieza el día en que la estación se dio de alta en ecowitt.net.
+ * Pone a la cola común el histórico de ecowitt.net de la estación (desde hoy hacia atrás, hasta el día en que se dio de
+ * alta allí). Se trae solo, poco a poco, aunque nadie tenga la página abierta.
  */
 app.post("/cuenta/estaciones/:id/importar", async (c) => {
   const f = await estacionEditable(c, Number(c.req.param("id")));
   if (!f) return c.json({ error: "Estación no encontrada" }, 404);
-  const b = await cuerpo(c);
   try {
-    const desde = typeof b?.desde === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.desde) ? b.desde : await primerDiaEcowitt(c.env, f);
-    return c.json({ desde, ...(await importarTramo(c.env, f, desde, ahora())) });
+    await clavesEcowitt(c.env, f); // comprueba que tiene las claves
+    const limite = await primerDiaEcowitt(c.env, f);
+    await encolarImportacion(c.env.DB, f.id, "ecowitt", "", fechaLocal(ahora()), limite);
+    c.executionCtx.waitUntil(avanzarImportaciones(c.env, f.id, 2).catch((e: unknown) => console.error("importación", e)));
+    return c.json(await estadoImportacion(c.env.DB, f.id));
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
   }
+});
+
+/** Cómo va la importación del histórico de la estación (null si no tiene). */
+app.get("/cuenta/estaciones/:id/importar", async (c) => {
+  const f = await estacionEditable(c, Number(c.req.param("id")));
+  if (!f) return c.json({ error: "Estación no encontrada" }, 404);
+  return c.json(await estadoImportacion(c.env.DB, f.id));
 });
 
 // ----- Mis ubicaciones (lugares para la previsión) -----
@@ -439,8 +449,8 @@ async function altaExterna(c: any) {
       (e) => (console.error("primera lectura", e), false),
     );
     if (ok) await c.env.DB.prepare("UPDATE estaciones SET ultima_consulta = ? WHERE id = ?").bind(t, f.id).run();
-    // AEMET: los últimos 6 meses de histórico diario, ya (el resto, hacia atrás, en las tareas de cada 10 minutos)
-    if (fuente === "aemet") c.executionCtx.waitUntil(avanzarHistoricoAemet(c.env, f.id, 1).catch((e) => console.error("histórico AEMET", e)));
+    // Una primera petición de su histórico ya (en AEMET, los últimos 6 meses); el resto, en la cola común
+    c.executionCtx.waitUntil(avanzarImportaciones(c.env, f.id, 1).catch((e: unknown) => console.error("importación", e)));
   }
   return c.json(r);
 }

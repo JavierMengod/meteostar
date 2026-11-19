@@ -10,8 +10,6 @@ import { fechaLocal } from "./fechas";
 import { PROVINCIAS_GUARDADAS, catalogoGuardado, feedProvincia } from "./meteoclimatic";
 import { CUPO_FICHAS, listaWU, pedirWU } from "./wunderground";
 
-/** Hasta qué uso del cupo diario se puede traer histórico (el resto queda para las lecturas de las dadas de alta) */
-const CUPO_HISTORICO = 1000;
 /** Distancia máxima entre dos estaciones para pensar que pueden ser la misma */
 const KM_GEMELAS = 2;
 /** Diferencia máxima (°C) de la máxima y la mínima del día para considerarlas la misma estación */
@@ -153,13 +151,15 @@ export async function comprobarCruce(env: Env): Promise<{ parejas: number; gemel
   for (let i = 0; i < sentencias.length; i += 50) await db.batch(sentencias.slice(i, i + 50));
 
   // Estaciones de Meteoclimatic dadas de alta que ya tienen gemela confirmada: su histórico, de Weather Underground
+  // (a la cola común de importaciones, si aún no tienen una)
   await db
     .prepare(
-      `UPDATE estaciones SET historico_wu = (
-         SELECT g.wu FROM gemelas g WHERE g.mc = upper(estaciones.meteoclimatic) AND g.iguales >= 1 AND g.iguales > g.distintos ORDER BY g.km LIMIT 1),
-         historico_pendiente = ?, historico_vacios = 0
-       WHERE tipo = 'externa' AND fuente = 'meteoclimatic' AND historico_wu IS NULL
-         AND EXISTS (SELECT 1 FROM gemelas g WHERE g.mc = upper(estaciones.meteoclimatic) AND g.iguales >= 1 AND g.iguales > g.distintos)`,
+      `INSERT OR IGNORE INTO importaciones (estacion_id, red, codigo, cursor, inicio)
+       SELECT e.id, 'wunderground', (SELECT g.wu FROM gemelas g WHERE g.mc = upper(e.meteoclimatic) AND g.iguales >= 1 AND g.iguales > g.distintos
+         ORDER BY g.km LIMIT 1), ?1, ?1
+       FROM estaciones e
+       WHERE e.tipo = 'externa' AND e.fuente = 'meteoclimatic'
+         AND EXISTS (SELECT 1 FROM gemelas g WHERE g.mc = upper(e.meteoclimatic) AND g.iguales >= 1 AND g.iguales > g.distintos)`,
     )
     .bind(sumarDias(hoy, -1))
     .run();
@@ -172,57 +172,4 @@ export async function tocaCruce(env: Env, ahora: number): Promise<boolean> {
   if (hora < 21) return false;
   const ultima = await env.DB.prepare("SELECT ultima FROM tareas WHERE nombre = 'cruce'").first<number>("ultima");
   return !ultima || ahora - ultima > 6.5 * 86400;
-}
-
-/**
- * Trae unos cuantos días de histórico de Weather Underground (hacia atrás) de las estaciones que lo tienen pendiente.
- * Cada día es una petición; se para si el cupo del día ya va por CUPO_HISTORICO. Solo añade días que no existen.
- */
-export async function avanzarHistoricoWU(env: Env, maxDias = 8): Promise<number> {
-  const db = env.DB;
-  const filas = (
-    await db
-      .prepare("SELECT id, historico_wu, historico_pendiente, historico_vacios FROM estaciones WHERE historico_wu IS NOT NULL AND historico_pendiente IS NOT NULL LIMIT 2")
-      .all<{ id: number; historico_wu: string; historico_pendiente: string; historico_vacios: number }>()
-  ).results;
-  let hechos = 0;
-  for (const f of filas) {
-    let dia = f.historico_pendiente;
-    let vacios = f.historico_vacios;
-    while (hechos < maxDias && dia) {
-      let o: any = null;
-      try {
-        const r = await pedirWU(env, `https://api.weather.com/v2/pws/history/daily?stationId=${f.historico_wu}&date=${dia.replaceAll("-", "")}&format=json&units=m&numericPrecision=decimal`, CUPO_HISTORICO);
-        if (r.status !== 204 && !r.ok) throw new Error(`HTTP ${r.status}`);
-        o = r.status === 204 ? null : ((await r.json()) as any)?.observations?.[0];
-      } catch (e) {
-        console.error("histórico WU", f.historico_wu, dia, e);
-        return hechos; // sin cupo: se sigue en otra pasada
-      }
-      hechos++;
-      if (o?.metric) {
-        vacios = 0;
-        const m = o.metric;
-        const v = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
-        const presion = (x: unknown) => (typeof x === "number" && x >= 950 && x <= 1060 ? x : null);
-        await db
-          .prepare(
-            `INSERT OR IGNORE INTO resumen_diario (estacion_id, fecha, tmax, tmin, hum_max, hum_min, presion_max, presion_min, viento_max,
-               racha_max, lluvia, radiacion_max, uv_max, temp_suma, temp_n, viento_suma, viento_n, lecturas, origen)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'wu')`,
-          )
-          .bind(
-            f.id, dia, v(m.tempHigh), v(m.tempLow), v(o.humidityHigh), v(o.humidityLow), presion(m.pressureMax), presion(m.pressureMin),
-            v(m.windspeedHigh), v(m.windgustHigh), v(m.precipTotal), v(o.solarRadiationHigh), v(o.uvHigh),
-            v(m.tempAvg), v(m.tempAvg) === null ? 0 : 1, v(m.windspeedAvg), v(m.windspeedAvg) === null ? 0 : 1,
-          )
-          .run();
-      } else vacios++;
-      // Se termina tras dos meses seguidos sin datos (la estación aún no existía) o al llegar a 2010
-      dia = vacios >= 60 || dia <= "2010-01-01" ? "" : sumarDias(dia, -1);
-    }
-    await db.prepare("UPDATE estaciones SET historico_pendiente = ?, historico_vacios = ? WHERE id = ?").bind(dia || null, vacios, f.id).run();
-    if (hechos >= maxDias) break;
-  }
-  return hechos;
 }

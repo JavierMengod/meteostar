@@ -196,8 +196,23 @@ export interface RespuestaEstacion {
   records: Extremos;
   /** Primer día con datos */
   desde: string | null;
-  /** Histórico que se está trayendo todavía de otra red (poco a poco, hacia atrás): de dónde y por qué día va */
-  importando: { red: string; hasta: string } | null;
+  /** Histórico que se está trayendo todavía de otra red (poco a poco, hacia atrás) */
+  importando: EstadoImportacion | null;
+}
+
+/** Cómo va la importación del histórico de una estación (cola común de importaciones). */
+export interface EstadoImportacion {
+  /** Red de la que se trae (AEMET, Weather Underground, ecowitt.net) */
+  red: string;
+  terminada: boolean;
+  /** Día por el que va (se trae hacia atrás); null si ya ha terminado */
+  porDia: string | null;
+  /** Días con datos traídos */
+  dias: number;
+  /** Porcentaje hecho, si se sabe desde cuándo tiene datos la red (ecowitt.net) */
+  porcentaje: number | null;
+  /** Último fallo, si está fallando */
+  error: string | null;
 }
 
 export interface PrevisionHora {

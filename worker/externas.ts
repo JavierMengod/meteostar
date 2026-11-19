@@ -6,6 +6,7 @@ import { cifrar } from "./cifrado";
 import { crearEstacion } from "./estaciones";
 import { PROVINCIAS_GUARDADAS, PROVINCIAS_MC, catalogoGuardado, catalogoProvincia, regionDe } from "./meteoclimatic";
 import { MAX_DADAS_DE_ALTA, listaWU } from "./wunderground";
+import { encolarImportacion } from "./importaciones";
 
 const sumarDias = (f: string, n: number) => new Date(Date.parse(`${f}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 
@@ -189,20 +190,15 @@ export async function anadirExterna(env: Env, quien: QuienDaDeAlta, fuenteElegid
     activa: 1,
   });
   if (fuente === "wunderground") await env.DB.prepare("UPDATE estaciones SET wunderground = ? WHERE id = ?").bind(codigo, id).run();
-  // AEMET: su histórico diario (valores climatológicos) se trae hacia atrás desde hoy, 6 meses por pasada
-  if (fuente === "aemet")
-    await env.DB.prepare("UPDATE estaciones SET aemet = ?, historico_pendiente = ?, historico_vacios = 0 WHERE id = ?")
-      .bind(codigo, new Date().toISOString().slice(0, 10), id)
-      .run();
+  if (fuente === "aemet") await env.DB.prepare("UPDATE estaciones SET aemet = ? WHERE id = ?").bind(codigo, id).run();
   // Histórico de Weather Underground: el de la propia estación o, si es de Meteoclimatic, el de su gemela (si la tiene)
   const deHistorico =
     fuente === "wunderground"
       ? codigo
       : ((await env.DB.prepare("SELECT wu FROM gemelas WHERE mc = ? AND iguales >= 1 AND iguales > distintos ORDER BY km LIMIT 1").bind(codigo).first<string>("wu")) ?? null);
-  if (deHistorico) {
-    const ayer = sumarDias(new Date().toISOString().slice(0, 10), -1);
-    await env.DB.prepare("UPDATE estaciones SET historico_wu = ?, historico_pendiente = ?, historico_vacios = 0 WHERE id = ?").bind(deHistorico, ayer, id).run();
-  }
+  // Su histórico, a la cola común de importaciones (AEMET: sus valores climatológicos diarios)
+  if (fuente === "aemet") await encolarImportacion(env.DB, id, "aemet", codigo);
+  else if (deHistorico) await encolarImportacion(env.DB, id, "wunderground", deHistorico, sumarDias(new Date().toISOString().slice(0, 10), -1));
   const f = await env.DB.prepare("SELECT slug FROM estaciones WHERE id = ?").bind(id).first<{ slug: string }>();
   return { slug: f!.slug };
 }

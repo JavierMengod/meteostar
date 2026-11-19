@@ -9,7 +9,7 @@
   },
   "observability": { "enabled": true },
   // Cada minuto: estaciones por API y limpieza horaria. Cada 10 minutos: satélite (min 3) y archivo del radar (min 8)
-  "triggers": { "crons": ["* * * * *", "3-59/10 * * * *", "8-59/10 * * * *", "1-59/2 * * * *"] },
+  "triggers": { "crons": ["* * * * *", "3-59/10 * * * *", "8-59/10 * * * *", "1-59/2 * * * *", "5-59/10 * * * *"] },
   "d1_databases": [
     {
       "binding": "DB",

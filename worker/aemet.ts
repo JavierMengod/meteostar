@@ -7,6 +7,7 @@
 // Las que se dan de alta se leen además con su conector, como cualquier estación, y guardan su histórico.
 
 import { localAUnix } from "./fechas";
+import { guardarDias, type DiaImportado } from "./historico-dias";
 
 const sumarDias = (f: string, n: number) => new Date(Date.parse(`${f}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 
@@ -26,7 +27,7 @@ export function gradosDMS(s: string): number | null {
 }
 
 /** Dos pasos de AEMET OpenData: la API da la dirección de los datos, que se descargan aparte (en ISO-8859-15). */
-async function pedirAemet(env: Env, ruta: string): Promise<any> {
+export async function pedirAemet(env: Env, ruta: string): Promise<any> {
   if (!env.AEMET_API_KEY) throw new Error("Falta la clave de AEMET OpenData");
   const r1 = await fetch(`${API}${ruta}`, { headers: { api_key: env.AEMET_API_KEY }, signal: AbortSignal.timeout(15_000) });
   const p = (await r1.json()) as any;
@@ -128,7 +129,7 @@ const horaAemet = (fecha: string, h: unknown): number | null => {
 };
 
 /** Un día de los valores climatológicos de AEMET → fila del resumen diario. */
-export function diaClimatologico(o: any, alt: number | null) {
+export function diaClimatologico(o: any, alt: number | null): DiaImportado {
   const fecha = String(o.fecha);
   const ms = (v: unknown) => (numAemet(v) === null ? null : Math.round(numAemet(v)! * 3.6 * 10) / 10); // m/s → km/h
   const tmed = numAemet(o.tmed);
@@ -142,117 +143,40 @@ export function diaClimatologico(o: any, alt: number | null) {
     hum_min: numAemet(o.hrMin),
     presion_max: presionMar(numAemet(o.presMax), alt, tmed),
     presion_min: presionMar(numAemet(o.presMin), alt, tmed),
+    viento_max: null, // AEMET da el viento medio del día, no el máximo de los medios
     racha_max: ms(o.racha),
     racha_max_ts: horaAemet(fecha, o.horaracha),
     lluvia: numAemet(o.prec),
+    radiacion_max: null,
+    uv_max: null,
     temp_media: tmed,
     viento_medio: ms(o.velmedia),
   };
 }
 
-/** Días que se piden de una vez (AEMET admite como mucho 6 meses por consulta) */
-const DIAS_POR_TRAMO = 180;
-/** Tramos por pasada de 10 minutos: año y medio por pasada (40 años de histórico, en unas 4-5 horas) */
-const TRAMOS_POR_PASADA = 3;
-/** historico_vacios de una estación cuyo histórico ya está completo */
-const HISTORICO_TERMINADO = 99;
+/** Estaciones a las que se completan los últimos días en cada pasada (cada una, una vez al día) */
+const RECIENTES_POR_PASADA = 4;
 
 /**
- * Trae el histórico diario de las estaciones de AEMET dadas de alta, hacia atrás, un tramo de 6 meses por pasada.
- * Termina tras un año seguido sin datos (la estación aún no existía). Los días que ya tienen lecturas de la propia
- * estación (las horarias de cada día desde el alta) no se tocan.
- */
-export async function avanzarHistoricoAemet(env: Env, soloId?: number, tramos = TRAMOS_POR_PASADA): Promise<number> {
-  if (!env.AEMET_API_KEY) return 0;
-  // Las que tienen el histórico a medias y las dadas de alta antes de que existiera esto (sin empezar)
-  const f = await env.DB.prepare(
-    `SELECT id, aemet, altitud, historico_pendiente, historico_vacios FROM estaciones
-     WHERE aemet IS NOT NULL AND historico_wu IS NULL AND activa = 1 ${soloId ? "AND id = ?" : ""}
-       AND (historico_pendiente IS NOT NULL OR coalesce(historico_vacios, 0) = 0)
-     ORDER BY historico_pendiente IS NULL LIMIT 1`,
-  )
-    .bind(...(soloId ? [soloId] : []))
-    .first<{ id: number; aemet: string; altitud: number | null; historico_pendiente: string | null; historico_vacios: number | null }>();
-  if (!f) return 0;
-  let pendiente: string | null = f.historico_pendiente ?? new Date().toISOString().slice(0, 10);
-  let vacios = f.historico_vacios ?? 0;
-  let total = 0;
-  for (let i = 0; i < tramos && pendiente; i++) {
-    const r = await tramoAemet(env, f, pendiente, vacios);
-    if (r === null) break; // AEMET pide una pausa: se sigue en la siguiente pasada
-    total += r.dias;
-    vacios = r.vacios;
-    pendiente = r.siguiente;
-  }
-  await env.DB.prepare("UPDATE estaciones SET historico_pendiente = ?, historico_vacios = ? WHERE id = ?")
-    .bind(pendiente, pendiente ? vacios : HISTORICO_TERMINADO, f.id)
-    .run();
-  return total;
-}
-
-/** Un tramo de 6 meses que acaba en «fin»; null si hay que esperar. */
-async function tramoAemet(
-  env: Env,
-  f: { id: number; aemet: string; altitud: number | null },
-  fin: string,
-  vaciosAntes: number,
-): Promise<{ dias: number; vacios: number; siguiente: string | null } | null> {
-  const db = env.DB;
-  const ini = sumarDias(fin, -(DIAS_POR_TRAMO - 1));
-  let dias: any[] = [];
-  try {
-    dias = await pedirAemet(
-      env,
-      `/valores/climatologicos/diarios/datos/fechaini/${ini}T00:00:00UTC/fechafin/${fin}T23:59:59UTC/estacion/${encodeURIComponent(f.aemet)}`,
-    );
-  } catch (e) {
-    const msg = String(e instanceof Error ? e.message : e);
-    // Pausa pedida por AEMET o fallo de red: se reintenta en la siguiente pasada
-    if (!/no hay datos/i.test(msg)) {
-      console.error("histórico AEMET", f.aemet, ini, msg);
-      return null;
-    }
-  }
-  const filas = (Array.isArray(dias) ? dias : []).map((o) => diaClimatologico(o, f.altitud)).filter((d) => d.tmax !== null || d.lluvia !== null);
-  if (filas.length) await guardarDiasAemet(db, f.id, filas);
-  // Se termina tras un año seguido sin datos (la estación aún no existía)
-  const vacios = filas.length ? 0 : vaciosAntes + 1;
-  return { dias: filas.length, vacios, siguiente: vacios >= 2 || ini <= "1920-01-01" ? null : sumarDias(ini, -1) };
-}
-
-/** Guarda días del histórico de AEMET; solo pisa los que tienen pocas lecturas propias (menos de 20 en el día). */
-async function guardarDiasAemet(db: D1Database, id: number, filas: ReturnType<typeof diaClimatologico>[]) {
-  const sql = db.prepare(
-    `INSERT INTO resumen_diario (estacion_id, fecha, tmax, tmax_ts, tmin, tmin_ts, hum_max, hum_min, presion_max, presion_min,
-       racha_max, racha_max_ts, lluvia, temp_suma, temp_n, viento_suma, viento_n, lecturas, origen)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'aemet')
-     ON CONFLICT (estacion_id, fecha) DO UPDATE SET tmax = excluded.tmax, tmax_ts = excluded.tmax_ts, tmin = excluded.tmin,
-       tmin_ts = excluded.tmin_ts, hum_max = excluded.hum_max, hum_min = excluded.hum_min, presion_max = excluded.presion_max,
-       presion_min = excluded.presion_min, racha_max = excluded.racha_max, racha_max_ts = excluded.racha_max_ts,
-       lluvia = excluded.lluvia, temp_suma = excluded.temp_suma, temp_n = excluded.temp_n, viento_suma = excluded.viento_suma,
-       viento_n = excluded.viento_n, origen = 'aemet'
-     WHERE resumen_diario.lecturas < 20`,
-  );
-  const lote = filas.map((d) =>
-    sql.bind(
-      id, d.fecha, d.tmax, d.tmax_ts, d.tmin, d.tmin_ts, d.hum_max, d.hum_min, d.presion_max, d.presion_min,
-      d.racha_max, d.racha_max_ts, d.lluvia, d.temp_media, d.temp_media === null ? 0 : 1, d.viento_medio, d.viento_medio === null ? 0 : 1,
-    ),
-  );
-  for (let i = 0; i < lote.length; i += 100) await db.batch(lote.slice(i, i + 100));
-}
-
-/**
- * Una vez al día: los últimos 15 días de cada estación de AEMET dada de alta. AEMET publica el resumen diario con
- * unos días de retraso: así se rellenan los días entre su último resumen y el alta (y los que falten).
+ * Una vez al día, cada estación de AEMET dada de alta: sus últimos 15 días. AEMET publica el resumen diario con unos
+ * días de retraso: así se rellenan los días entre su último resumen y el alta (y los que falten). Unas pocas por
+ * pasada, por turnos: vale igual con 3 estaciones que con 300.
  */
 export async function completarRecientesAemet(env: Env): Promise<void> {
   if (!env.AEMET_API_KEY) return;
   const db = env.DB;
   const hoy = new Date().toISOString().slice(0, 10);
-  const hecha = await db.prepare("SELECT ultima FROM tareas WHERE nombre = 'aemet-recientes'").first<number>("ultima");
-  if (hecha && Date.now() / 1000 - hecha < 20 * 3600) return;
-  const estaciones = (await db.prepare("SELECT id, aemet, altitud FROM estaciones WHERE aemet IS NOT NULL AND activa = 1 LIMIT 5").all<{ id: number; aemet: string; altitud: number | null }>()).results;
+  const estaciones = (
+    await db
+      .prepare(
+        `SELECT e.id, e.aemet, e.altitud FROM estaciones e
+         LEFT JOIN tareas t ON t.nombre = 'aemet-recientes-' || e.id
+         WHERE e.aemet IS NOT NULL AND e.activa = 1 AND (t.ultima IS NULL OR t.ultima < unixepoch() - 20 * 3600)
+         ORDER BY t.ultima IS NOT NULL, t.ultima LIMIT ?`,
+      )
+      .bind(RECIENTES_POR_PASADA)
+      .all<{ id: number; aemet: string; altitud: number | null }>()
+  ).results;
   for (const f of estaciones) {
     try {
       const dias: any[] = await pedirAemet(
@@ -260,12 +184,15 @@ export async function completarRecientesAemet(env: Env): Promise<void> {
         `/valores/climatologicos/diarios/datos/fechaini/${sumarDias(hoy, -15)}T00:00:00UTC/fechafin/${hoy}T23:59:59UTC/estacion/${encodeURIComponent(f.aemet)}`,
       );
       const filas = dias.map((o) => diaClimatologico(o, f.altitud)).filter((d) => d.tmax !== null || d.lluvia !== null);
-      if (filas.length) await guardarDiasAemet(db, f.id, filas);
+      if (filas.length) await guardarDias(db, f.id, "aemet", filas);
     } catch (e) {
       const msg = String(e instanceof Error ? e.message : e);
       if (/l.mite/i.test(msg)) return; // se reintenta en la siguiente pasada
       if (!/no hay datos/i.test(msg)) console.error("recientes AEMET", f.aemet, msg);
     }
+    await db
+      .prepare("INSERT INTO tareas (nombre, ultima) VALUES (?, unixepoch()) ON CONFLICT (nombre) DO UPDATE SET ultima = excluded.ultima")
+      .bind(`aemet-recientes-${f.id}`)
+      .run();
   }
-  await db.prepare("INSERT INTO tareas (nombre, ultima) VALUES ('aemet-recientes', unixepoch()) ON CONFLICT (nombre) DO UPDATE SET ultima = excluded.ultima").run();
 }

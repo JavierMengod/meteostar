@@ -28,6 +28,7 @@ import { detalleAforo, estadoAforos } from "../aforos";
 import { anioAforo, previsionAforo, resumenAforo } from "../historico-aforos";
 import { radar, teselaRadar } from "../radar";
 import { CAPAS_SATELITE, imagenSatelite, PASOS, satelite, type CapaSatelite } from "../seguimiento";
+import { estadoImportacion } from "../importaciones";
 
 export const ahora = () => Math.floor(Date.now() / 1000);
 
@@ -211,12 +212,9 @@ app.get("/estaciones/:slug/completo", async (c) => {
     extremos(db, id, `${anio}-01-01`, hoy),
     extremos(db, id, "0000-01-01", hoy),
   ]);
-  const imp = await db
-    .prepare("SELECT historico_pendiente AS p, historico_wu AS wu FROM estaciones WHERE id = ?")
-    .bind(id)
-    .first<{ p: string | null; wu: string | null }>();
+  const imp = await estadoImportacion(db, id);
   const respuesta: RespuestaEstacion = {
-    importando: imp?.p ? { red: imp.wu ? "Weather Underground" : "AEMET", hasta: imp.p } : null,
+    importando: imp && !imp.terminada ? imp : null,
     ahora: t,
     actual,
     hoy: rHoy,

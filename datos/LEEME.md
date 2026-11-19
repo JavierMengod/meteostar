@@ -59,3 +59,23 @@ Solo toca días con `origen = 'hoja'`: se carga **después** de `hoja-villastar.
 ```
 npx wrangler d1 execute meteostar --remote --file datos/wu-villastar.sql
 ```
+
+# Histórico de las estaciones de otras redes (AEMET, Weather Underground, ecowitt.net)
+
+Al dar de alta una estación, su histórico se pone en la **cola de importaciones** (tabla `importaciones`). El worker la
+avanza solo cada 10 minutos (tarea `5-59/10`), de lo más reciente hacia atrás y por turnos entre estaciones, con un cupo
+por red: vale igual con una estación que con cientos, pero por los límites de Cloudflare va despacio con históricos largos.
+
+Para traer **de golpe** lo pendiente (p. ej. 40 años de una estación de AEMET), desde el ordenador:
+
+```
+node scripts/importar-historicos.mjs --remote            # todo lo pendiente de AEMET y Weather Underground
+node scripts/importar-historicos.mjs --remote --solo teruel
+```
+
+Usa el mismo código que el worker para convertir y guardar los días, y deja la importación marcada como hecha (la cola
+ya no la toca). Va tan rápido como deja cada red (AEMET pide una pausa de un minuto cada pocas decenas de consultas: unos
+minutos por estación). Para respetar el límite de D1 gratuito (100.000 filas escritas al día) se para a las 80.000
+(`--max-filas`): lo que quede lo sigue la cola, o se vuelve a ejecutar al día siguiente. Weather Underground da un día
+por consulta y la clave unas 1.500 al día (compartidas con la web): como mucho 800 por ejecución (`--max-wu`).
+ecowitt.net no va en el script (sus claves están cifradas en la base de datos): lo trae la cola.

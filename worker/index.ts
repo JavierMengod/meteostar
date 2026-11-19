@@ -7,8 +7,9 @@ import { borrarAntiguas } from "./db";
 import { actualizarAforos } from "./aforos";
 import { avanzarCalculos } from "./calculos-aforos";
 import { refrescarEmbalses } from "./embalses";
-import { avanzarHistoricoWU, comprobarCruce, tocaCruce } from "./cruce";
-import { avanzarHistoricoAemet, completarRecientesAemet, refrescarAemet } from "./aemet";
+import { comprobarCruce, tocaCruce } from "./cruce";
+import { avanzarImportaciones } from "./importaciones";
+import { completarRecientesAemet, refrescarAemet } from "./aemet";
 import { actualizarHistorico, refrescarResumenes } from "./historico-aforos";
 import { archivarRadar } from "./radar";
 import { actualizarSatelite } from "./seguimiento";
@@ -45,16 +46,23 @@ export default {
       );
       return;
     }
+    // Cada 10 minutos: históricos de otras redes (cola común, por turnos entre estaciones; invocación aparte, con su
+    // propio cupo de peticiones) y, una vez al día, los últimos días del resumen oficial de las de AEMET
+    if (controller.cron === "5-59/10 * * * *") {
+      ctx.waitUntil(
+        avanzarImportaciones(env)
+          .then(() => completarRecientesAemet(env))
+          .catch((e) => console.error("importaciones", e)),
+      );
+      return;
+    }
     // Cada 10 minutos: archivo del radar de la zona (otra invocación aparte)
     if (controller.cron === "8-59/10 * * * *") {
       ctx.waitUntil(archivarRadar(env).catch((e) => console.error("radar", e)));
       // Otras redes: histórico de Weather Underground de las dadas de alta (poco a poco) y, una vez por semana, el cruce
       // entre Meteoclimatic y Weather Underground (gemelas y avisos de calidad)
       ctx.waitUntil(
-        avanzarHistoricoWU(env)
-          .then(() => avanzarHistoricoAemet(env))
-          .then(() => completarRecientesAemet(env))
-          .then(() => refrescarAemet(env))
+        refrescarAemet(env)
           .then(async () => {
             if (await tocaCruce(env, Math.floor(controller.scheduledTime / 1000))) await comprobarCruce(env);
           })

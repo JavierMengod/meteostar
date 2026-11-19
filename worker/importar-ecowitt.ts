@@ -11,8 +11,6 @@ import type { FilaEstacion } from "./estaciones";
 import { fechaLocal } from "./fechas";
 
 const API = "https://api.ecowitt.net/api/v3/device";
-/** Días por llamada (una petición a ecowitt.net por día) */
-export const DIAS_POR_LLAMADA = 5;
 
 const sumarDias = (fecha: string, n: number) => new Date(Date.parse(`${fecha}T12:00:00Z`) + n * 86400_000).toISOString().slice(0, 10);
 
@@ -22,7 +20,7 @@ const num = (x: unknown) => {
 };
 
 /** Claves de ecowitt.net de la estación (las del conector ecowitt.net o la reserva del envío directo). */
-async function claves(env: Env, f: FilaEstacion) {
+export async function clavesEcowitt(env: Env, f: FilaEstacion) {
   if (f.fuente !== "ecowitt_api" && f.fuente !== "directo") throw new Error("Esta estación no lee de ecowitt.net");
   const c = await descifrar(env, f.config);
   if (!c.application_key || !c.api_key || !c.mac) throw new Error("Faltan las claves de ecowitt.net (Application Key, API Key y MAC)");
@@ -38,7 +36,7 @@ async function pedir(ruta: string, params: Record<string, string>) {
 
 /** Día (aaaa-mm-dd) en que la estación se dio de alta en ecowitt.net. */
 export async function primerDiaEcowitt(env: Env, f: FilaEstacion): Promise<string> {
-  const c = await claves(env, f);
+  const c = await clavesEcowitt(env, f);
   const d = await pedir("info", { application_key: c.application_key, api_key: c.api_key, mac: c.mac });
   const creada = num(d?.createtime);
   if (!creada) throw new Error("ecowitt.net no dice desde cuándo tiene datos");
@@ -130,7 +128,7 @@ export function lecturasHistorico(data: any, fecha: string): Lectura[] {
 }
 
 /** Importa un día. Devuelve cuántas lecturas tenía. */
-async function importarDia(env: Env, f: FilaEstacion, c: { application_key: string; api_key: string; mac: string }, fecha: string, ahora: number): Promise<number> {
+export async function importarDia(env: Env, f: FilaEstacion, c: { application_key: string; api_key: string; mac: string }, fecha: string, ahora: number): Promise<number> {
   const diasAtras = (ahora - Date.parse(`${fecha}T12:00:00Z`) / 1000) / 86400;
   // Se pide con margen por los dos lados (ecowitt.net usa la zona horaria de la estación) y se filtra por el día de Madrid
   const data = await pedir("history", {
@@ -148,21 +146,4 @@ async function importarDia(env: Env, f: FilaEstacion, c: { application_key: stri
   // Las lecturas solo se conservan unos días: las de antes ya no se guardan (se borrarían esta noche)
   if (diasAtras < DIAS_LECTURAS) await guardarLecturasLote(env.DB, f.id, lecturas, "ecowitt_historico");
   return lecturas.length;
-}
-
-/**
- * Importa hasta DIAS_POR_LLAMADA días a partir de «desde» (incluido) sin pasar de hoy. Devuelve el siguiente día
- * pendiente (o null si ya está todo), para que la página vaya llamando hasta acabar.
- */
-export async function importarTramo(env: Env, f: FilaEstacion, desde: string, ahora: number) {
-  const c = await claves(env, f);
-  // Hasta hoy incluido (lo que lleva de día): así el resumen de hoy también tiene la mínima de la madrugada
-  const ultimo = fechaLocal(ahora);
-  const hechos: { fecha: string; lecturas: number }[] = [];
-  let fecha = desde;
-  while (fecha <= ultimo && hechos.length < DIAS_POR_LLAMADA) {
-    hechos.push({ fecha, lecturas: await importarDia(env, f, c, fecha, ahora) });
-    fecha = sumarDias(fecha, 1);
-  }
-  return { hechos, siguiente: fecha <= ultimo ? fecha : null, ultimo };
 }

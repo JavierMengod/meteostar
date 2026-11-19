@@ -1,6 +1,6 @@
 // Alta y edición de una estación: 1) dónde está (mapa), 2) qué es, 3) de dónde vienen los datos.
 import { lazy, Suspense, useEffect, useState } from "react";
-import type { EstacionPropia, InfoConector, RespuestaCuenta } from "../../shared/tipos";
+import type { EstacionPropia, EstadoImportacion, InfoConector, RespuestaCuenta } from "../../shared/tipos";
 import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
 import { enviar, navegar, usePeticion, useSesion } from "../datos";
 import { hora, n } from "../formato";
@@ -63,6 +63,13 @@ const deEstacion = (e: EstacionPropia): Formulario => ({
   red: e.red ?? "",
 });
 
+/** Cómo va la importación del histórico, en una frase. */
+function textoImportacion(s: EstadoImportacion): string {
+  if (s.terminada) return `Histórico de ${s.red} importado: ${s.dias.toLocaleString("es-ES")} días con datos.`;
+  const va = `Trayendo el histórico de ${s.red}: ${s.dias.toLocaleString("es-ES")} días${s.porcentaje !== null ? ` (${s.porcentaje} %)` : ""}, va por el ${s.porDia}.`;
+  return `${va} ${s.error ? `Ahora falla (${s.error}); se reintenta solo.` : "Sigue solo aunque cierres la página."}`;
+}
+
 export default function EditorEstacion({ id }: { id: string }) {
   const sesion = useSesion();
   const nueva = id === "nueva";
@@ -76,8 +83,27 @@ export default function EditorEstacion({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [prueba, setPrueba] = useState<{ ok: boolean; texto: string } | null>(null);
-  // Importación del histórico de ecowitt.net (los hooks, antes de cualquier return)
+  // Importación del histórico (los hooks, antes de cualquier return): la hace el servidor, aquí solo se mira cómo va
   const [importacion, setImportacion] = useState<{ ok: boolean; texto: string; enCurso: boolean } | null>(null);
+  const [mirarImportacion, setMirarImportacion] = useState(0);
+  useEffect(() => {
+    if (nueva || !id) return;
+    let vivo = true;
+    let espera: ReturnType<typeof setTimeout>;
+    const mirar = async () => {
+      const s: EstadoImportacion | null = await fetch(`/api/cuenta/estaciones/${id}/importar`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      if (!vivo || !s) return;
+      setImportacion({ ok: !s.error, texto: textoImportacion(s), enCurso: !s.terminada });
+      if (!s.terminada) espera = setTimeout(mirar, 15_000);
+    };
+    mirar();
+    return () => {
+      vivo = false;
+      clearTimeout(espera);
+    };
+  }, [id, nueva, mirarImportacion]);
 
   useEffect(() => {
     if (sesion.cargada && !sesion.usuario) navegar("/entrar", true);
@@ -134,39 +160,15 @@ export default function EditorEstacion({ id }: { id: string }) {
     );
   };
 
-  // Importación del histórico de ecowitt.net, por tramos de unos días
+  // Histórico de ecowitt.net: a la cola común del servidor (se trae solo, aunque se cierre la página)
   const importar = async () => {
     if (!(await guardar())) return;
-    type Tramo = { desde: string; hechos: { fecha: string; lecturas: number }[]; siguiente: string | null; ultimo: string; error?: string };
-    // undefined: aún no ha empezado (el servidor elige el primer día); null: terminado
-    let desde: string | null | undefined;
-    let dias = 0;
-    let lecturas = 0;
-    let inicio = "";
     setImportacion({ ok: true, texto: "Preguntando a ecowitt.net desde cuándo tiene datos…", enCurso: true });
     try {
-      let pausas = 0;
-      do {
-        let r: Tramo;
-        try {
-          r = await enviar<Tramo>(`/api/cuenta/estaciones/${id}/importar`, "POST", desde ? { desde } : {});
-        } catch (e) {
-          // ecowitt.net limita las peticiones por minuto: se espera y se sigue donde iba
-          if (!/upper limit|limit/i.test(String(e instanceof Error ? e.message : e)) || ++pausas > 30) throw e;
-          setImportacion({ ok: true, texto: `ecowitt.net pide una pausa: se sigue en un minuto (${dias} días importados)…`, enCurso: true });
-          await new Promise((res) => setTimeout(res, 65_000));
-          continue;
-        }
-        inicio ||= r.desde;
-        dias += r.hechos.length;
-        lecturas += r.hechos.reduce((s, h) => s + h.lecturas, 0);
-        const total = Math.round((Date.parse(r.ultimo) - Date.parse(inicio)) / 86400_000) + 1;
-        setImportacion({ ok: true, texto: `Importando… ${dias} de ${total} días (hasta el ${r.hechos.at(-1)?.fecha ?? r.desde})`, enCurso: true });
-        desde = r.siguiente;
-      } while (desde !== null);
-      setImportacion({ ok: true, texto: `Hecho: ${dias} días desde el ${inicio} (${lecturas.toLocaleString("es-ES")} datos de ecowitt.net).`, enCurso: false });
+      await enviar(`/api/cuenta/estaciones/${id}/importar`, "POST");
+      setMirarImportacion((v) => v + 1);
     } catch (e) {
-      setImportacion({ ok: false, texto: `Se ha parado: ${e instanceof Error ? e.message : String(e)}. Puedes volver a pulsar para seguir.`, enCurso: false });
+      setImportacion({ ok: false, texto: `No se ha podido empezar: ${e instanceof Error ? e.message : String(e)}`, enCurso: false });
     }
   };
   const leeEcowitt = f.fuente === "ecowitt_api" || f.fuente === "directo";
