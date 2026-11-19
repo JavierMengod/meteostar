@@ -478,7 +478,7 @@ export default function Estacion({ slug, prevision }: Props) {
 
       <CabeceraSeccion
         titulo="Últimas horas"
-        nota={`Un punto cada 5 minutos${horas === 24 ? " · en gris, la temperatura de ayer a la misma hora" : ""} · la franja sombreada es la noche`}
+        nota={`${estacion.fuente === "aemet" ? "Un dato cada hora" : estacion.fuente === "meteoclimatic" || estacion.fuente === "wunderground" ? "Un punto cada 10 minutos" : "Un punto cada 5 minutos"}${horas === 24 ? " · en gris, la temperatura de ayer a la misma hora" : ""} · la franja sombreada es la noche`}
       />
       <div className="periodos" role="tablist">
         {PERIODOS.map((p) => (
@@ -497,9 +497,11 @@ export default function Estacion({ slug, prevision }: Props) {
                 <Panel titulo="Temperatura y humedad" nota="°C · %">
                   <GraficaTempHum datos={historico} marco={marco} ayer={ayer} />
                 </Panel>
-                <Panel titulo="Presión atmosférica" nota="hPa, reducida al nivel del mar">
-                  <GraficaPresion datos={historico} marco={marco} />
-                </Panel>
+                {historico.some((p) => p.presion !== null) && (
+                  <Panel titulo="Presión atmosférica" nota="hPa, reducida al nivel del mar">
+                    <GraficaPresion datos={historico} marco={marco} />
+                  </Panel>
+                )}
                 <Panel titulo="Viento" nota="km/h">
                   <GraficaViento datos={historico} marco={marco} />
                 </Panel>
@@ -553,15 +555,21 @@ export default function Estacion({ slug, prevision }: Props) {
             <Panel titulo="Viento" nota="km/h · racha máxima y viento medio">
               <DiariaViento dias={diasGrafica} onDia={setDiaConsulta} />
             </Panel>
-            <Panel titulo="Presión atmosférica" nota="hPa · mínima y máxima de cada día">
-              <DiariaPresion dias={diasGrafica} onDia={setDiaConsulta} />
-            </Panel>
-            <Panel titulo="Humedad" nota="% · mínima y máxima de cada día">
-              <DiariaHumedad dias={diasGrafica} onDia={setDiaConsulta} />
-            </Panel>
-            <Panel titulo="Radiación solar y UV" nota="máximos de cada día">
-              <DiariaSol dias={diasGrafica} onDia={setDiaConsulta} />
-            </Panel>
+            {diasGrafica.some((d) => d.presion_max !== null) && (
+              <Panel titulo="Presión atmosférica" nota="hPa · mínima y máxima de cada día">
+                <DiariaPresion dias={diasGrafica} onDia={setDiaConsulta} />
+              </Panel>
+            )}
+            {diasGrafica.some((d) => d.hum_max !== null) && (
+              <Panel titulo="Humedad" nota="% · mínima y máxima de cada día">
+                <DiariaHumedad dias={diasGrafica} onDia={setDiaConsulta} />
+              </Panel>
+            )}
+            {diasGrafica.some((d) => d.radiacion_max !== null || d.uv_max !== null) && (
+              <Panel titulo="Radiación solar y UV" nota="máximos de cada día">
+                <DiariaSol dias={diasGrafica} onDia={setDiaConsulta} />
+              </Panel>
+            )}
             {diasGrafica.some((d) => (d.rayos ?? 0) > 0) && (
               <Panel titulo="Rayos" nota="detectados cada día">
                 <DiariaRayos dias={diasGrafica} onDia={setDiaConsulta} />
@@ -775,7 +783,10 @@ function ConsultarDia({ base, hoy, desde, elegido }: { base: string; hoy: string
         ["Rayos", String(r.rayos ?? "—"), "", null, r.rayos !== null && r.rayos !== undefined],
       ]
     : [];
-  const casillas = todas.filter((c) => !deHoja || c[4]).map(([t, v, u, h]) => [t, v, u, h] as const);
+  // Sin dato (la estación no lo mide, o el día importado no lo trae): no se enseña; máxima, mínima y lluvia, siempre
+  const casillas = todas
+    .filter((c) => c[4] || (!deHoja && ["Temp. máxima", "Temp. mínima", "Precipitación"].includes(c[0])))
+    .map(([t, v, u, h]) => [t, v, u, h] as const);
   return (
     <>
       <CabeceraSeccion id="consultar-dia" titulo="Consultar un día" nota={`Extremos de cualquier día desde el ${fechaCorta(minimo, true)}`} />
@@ -794,7 +805,9 @@ function ConsultarDia({ base, hoy, desde, elegido }: { base: string; hoy: string
         </div>
         {r?.origen && (
           <p className="aviso-hoja suave pequeno">
-            {r.origen === "wu"
+            {r.origen === "aemet"
+              ? "Resumen diario oficial de AEMET (valores climatológicos): la presión, reducida al nivel del mar."
+              : r.origen === "wu"
               ? "Día anterior a ecowitt.net: datos de la misma estación en Weather Underground (lecturas cada 5 minutos); la lluvia, de la hoja de cálculo de la estación."
               : r.origen === "hoja+wu"
                 ? "Día anterior a ecowitt.net: de la hoja de cálculo de la estación anterior, completada con sus datos de Weather Underground (humedad, presión, radiación y horas de los extremos)."

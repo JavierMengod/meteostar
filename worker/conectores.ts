@@ -2,6 +2,7 @@
 // Para añadir una fuente nueva basta con añadir un conector a CONECTORES.
 import type { InfoConector, Lectura } from "../shared/tipos";
 import { puntoRocio, redondear, sensacionTermica } from "../shared/meteo";
+import { presionMar } from "./aemet";
 import { leerRespuestaApi, urlApiEcowitt } from "./ecowitt";
 import { fechaLocal } from "./fechas";
 import { bloqueEstacion, feedProvincia, leerRssEstacion, regionDe, rssEstacion } from "./meteoclimatic";
@@ -194,7 +195,8 @@ export function leerObservacionesAemet(obs: any[]): Lectura[] {
       temp: num(o.ta),
       hum: num(o.hr),
       rocio: num(o.tpr),
-      presion: num(o.pres_nmar),
+      // Muchas estaciones no dan la presión reducida al nivel del mar: se calcula con la de la estación y su altitud
+      presion: num(o.pres_nmar) ?? presionMar(num(o.pres), num(o.alt), num(o.ta)),
       presion_abs: num(o.pres),
       viento: ms(o.vv),
       racha: ms(o.vmax),

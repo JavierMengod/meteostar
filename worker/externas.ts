@@ -189,7 +189,11 @@ export async function anadirExterna(env: Env, quien: QuienDaDeAlta, fuenteElegid
     activa: 1,
   });
   if (fuente === "wunderground") await env.DB.prepare("UPDATE estaciones SET wunderground = ? WHERE id = ?").bind(codigo, id).run();
-  if (fuente === "aemet") await env.DB.prepare("UPDATE estaciones SET aemet = ? WHERE id = ?").bind(codigo, id).run();
+  // AEMET: su histórico diario (valores climatológicos) se trae hacia atrás desde hoy, 6 meses por pasada
+  if (fuente === "aemet")
+    await env.DB.prepare("UPDATE estaciones SET aemet = ?, historico_pendiente = ?, historico_vacios = 0 WHERE id = ?")
+      .bind(codigo, new Date().toISOString().slice(0, 10), id)
+      .run();
   // Histórico de Weather Underground: el de la propia estación o, si es de Meteoclimatic, el de su gemela (si la tiene)
   const deHistorico =
     fuente === "wunderground"

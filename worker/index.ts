@@ -8,7 +8,7 @@ import { actualizarAforos } from "./aforos";
 import { avanzarCalculos } from "./calculos-aforos";
 import { refrescarEmbalses } from "./embalses";
 import { avanzarHistoricoWU, comprobarCruce, tocaCruce } from "./cruce";
-import { refrescarAemet } from "./aemet";
+import { avanzarHistoricoAemet, completarRecientesAemet, refrescarAemet } from "./aemet";
 import { actualizarHistorico, refrescarResumenes } from "./historico-aforos";
 import { archivarRadar } from "./radar";
 import { actualizarSatelite } from "./seguimiento";
@@ -52,6 +52,8 @@ export default {
       // entre Meteoclimatic y Weather Underground (gemelas y avisos de calidad)
       ctx.waitUntil(
         avanzarHistoricoWU(env)
+          .then(() => avanzarHistoricoAemet(env))
+          .then(() => completarRecientesAemet(env))
           .then(() => refrescarAemet(env))
           .then(async () => {
             if (await tocaCruce(env, Math.floor(controller.scheduledTime / 1000))) await comprobarCruce(env);

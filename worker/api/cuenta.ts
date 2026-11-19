@@ -1,5 +1,6 @@
 // API de cuentas: acceso, invitaciones, mis estaciones, mis ubicaciones y administración.
 import { Hono } from "hono";
+import { avanzarHistoricoAemet } from "../aemet";
 import type { Invitacion, RespuestaCuenta, Ubicacion } from "../../shared/tipos";
 import {
   aleatorio,
@@ -438,6 +439,8 @@ async function altaExterna(c: any) {
       (e) => (console.error("primera lectura", e), false),
     );
     if (ok) await c.env.DB.prepare("UPDATE estaciones SET ultima_consulta = ? WHERE id = ?").bind(t, f.id).run();
+    // AEMET: los últimos 6 meses de histórico diario, ya (el resto, hacia atrás, en las tareas de cada 10 minutos)
+    if (fuente === "aemet") c.executionCtx.waitUntil(avanzarHistoricoAemet(c.env, f.id).catch((e) => console.error("histórico AEMET", e)));
   }
   return c.json(r);
 }
