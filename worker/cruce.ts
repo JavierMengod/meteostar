@@ -178,7 +178,7 @@ export async function tocaCruce(env: Env, ahora: number): Promise<boolean> {
  * Trae unos cuantos días de histórico de Weather Underground (hacia atrás) de las estaciones que lo tienen pendiente.
  * Cada día es una petición; se para si el cupo del día ya va por CUPO_HISTORICO. Solo añade días que no existen.
  */
-export async function avanzarHistoricoWU(env: Env, maxDias = 5): Promise<number> {
+export async function avanzarHistoricoWU(env: Env, maxDias = 8): Promise<number> {
   const db = env.DB;
   const filas = (
     await db

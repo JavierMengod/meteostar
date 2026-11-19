@@ -440,7 +440,7 @@ async function altaExterna(c: any) {
     );
     if (ok) await c.env.DB.prepare("UPDATE estaciones SET ultima_consulta = ? WHERE id = ?").bind(t, f.id).run();
     // AEMET: los últimos 6 meses de histórico diario, ya (el resto, hacia atrás, en las tareas de cada 10 minutos)
-    if (fuente === "aemet") c.executionCtx.waitUntil(avanzarHistoricoAemet(c.env, f.id).catch((e) => console.error("histórico AEMET", e)));
+    if (fuente === "aemet") c.executionCtx.waitUntil(avanzarHistoricoAemet(c.env, f.id, 1).catch((e) => console.error("histórico AEMET", e)));
   }
   return c.json(r);
 }

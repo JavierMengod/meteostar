@@ -4227,3 +4227,11 @@ h3 {
   border-radius: 2px;
   outline: 1.5px solid var(--tinta);
 }
+
+/* Estación: aviso mientras se trae el histórico de otra red */
+.aviso-importando {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--acento-suave);
+}

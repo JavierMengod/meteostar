@@ -211,7 +211,12 @@ app.get("/estaciones/:slug/completo", async (c) => {
     extremos(db, id, `${anio}-01-01`, hoy),
     extremos(db, id, "0000-01-01", hoy),
   ]);
+  const imp = await db
+    .prepare("SELECT historico_pendiente AS p, historico_wu AS wu FROM estaciones WHERE id = ?")
+    .bind(id)
+    .first<{ p: string | null; wu: string | null }>();
   const respuesta: RespuestaEstacion = {
+    importando: imp?.p ? { red: imp.wu ? "Weather Underground" : "AEMET", hasta: imp.p } : null,
     ahora: t,
     actual,
     hoy: rHoy,

@@ -152,24 +152,52 @@ export function diaClimatologico(o: any, alt: number | null) {
 
 /** Días que se piden de una vez (AEMET admite como mucho 6 meses por consulta) */
 const DIAS_POR_TRAMO = 180;
+/** Tramos por pasada de 10 minutos: año y medio por pasada (40 años de histórico, en unas 4-5 horas) */
+const TRAMOS_POR_PASADA = 3;
+/** historico_vacios de una estación cuyo histórico ya está completo */
+const HISTORICO_TERMINADO = 99;
 
 /**
  * Trae el histórico diario de las estaciones de AEMET dadas de alta, hacia atrás, un tramo de 6 meses por pasada.
  * Termina tras un año seguido sin datos (la estación aún no existía). Los días que ya tienen lecturas de la propia
  * estación (las horarias de cada día desde el alta) no se tocan.
  */
-export async function avanzarHistoricoAemet(env: Env, soloId?: number): Promise<number> {
+export async function avanzarHistoricoAemet(env: Env, soloId?: number, tramos = TRAMOS_POR_PASADA): Promise<number> {
   if (!env.AEMET_API_KEY) return 0;
-  const db = env.DB;
-  const f = await db
-    .prepare(
-      `SELECT id, aemet, altitud, historico_pendiente, historico_vacios FROM estaciones
-       WHERE aemet IS NOT NULL AND historico_wu IS NULL AND historico_pendiente IS NOT NULL ${soloId ? "AND id = ?" : ""} LIMIT 1`,
-    )
+  // Las que tienen el histórico a medias y las dadas de alta antes de que existiera esto (sin empezar)
+  const f = await env.DB.prepare(
+    `SELECT id, aemet, altitud, historico_pendiente, historico_vacios FROM estaciones
+     WHERE aemet IS NOT NULL AND historico_wu IS NULL AND activa = 1 ${soloId ? "AND id = ?" : ""}
+       AND (historico_pendiente IS NOT NULL OR coalesce(historico_vacios, 0) = 0)
+     ORDER BY historico_pendiente IS NULL LIMIT 1`,
+  )
     .bind(...(soloId ? [soloId] : []))
-    .first<{ id: number; aemet: string; altitud: number | null; historico_pendiente: string; historico_vacios: number }>();
+    .first<{ id: number; aemet: string; altitud: number | null; historico_pendiente: string | null; historico_vacios: number | null }>();
   if (!f) return 0;
-  const fin = f.historico_pendiente;
+  let pendiente: string | null = f.historico_pendiente ?? new Date().toISOString().slice(0, 10);
+  let vacios = f.historico_vacios ?? 0;
+  let total = 0;
+  for (let i = 0; i < tramos && pendiente; i++) {
+    const r = await tramoAemet(env, f, pendiente, vacios);
+    if (r === null) break; // AEMET pide una pausa: se sigue en la siguiente pasada
+    total += r.dias;
+    vacios = r.vacios;
+    pendiente = r.siguiente;
+  }
+  await env.DB.prepare("UPDATE estaciones SET historico_pendiente = ?, historico_vacios = ? WHERE id = ?")
+    .bind(pendiente, pendiente ? vacios : HISTORICO_TERMINADO, f.id)
+    .run();
+  return total;
+}
+
+/** Un tramo de 6 meses que acaba en «fin»; null si hay que esperar. */
+async function tramoAemet(
+  env: Env,
+  f: { id: number; aemet: string; altitud: number | null },
+  fin: string,
+  vaciosAntes: number,
+): Promise<{ dias: number; vacios: number; siguiente: string | null } | null> {
+  const db = env.DB;
   const ini = sumarDias(fin, -(DIAS_POR_TRAMO - 1));
   let dias: any[] = [];
   try {
@@ -182,15 +210,14 @@ export async function avanzarHistoricoAemet(env: Env, soloId?: number): Promise<
     // Pausa pedida por AEMET o fallo de red: se reintenta en la siguiente pasada
     if (!/no hay datos/i.test(msg)) {
       console.error("histórico AEMET", f.aemet, ini, msg);
-      return 0;
+      return null;
     }
   }
   const filas = (Array.isArray(dias) ? dias : []).map((o) => diaClimatologico(o, f.altitud)).filter((d) => d.tmax !== null || d.lluvia !== null);
   if (filas.length) await guardarDiasAemet(db, f.id, filas);
-  const vacios = filas.length ? 0 : f.historico_vacios + 1;
-  const siguiente = vacios >= 2 || ini <= "1920-01-01" ? null : sumarDias(ini, -1);
-  await db.prepare("UPDATE estaciones SET historico_pendiente = ?, historico_vacios = ? WHERE id = ?").bind(siguiente, vacios, f.id).run();
-  return filas.length;
+  // Se termina tras un año seguido sin datos (la estación aún no existía)
+  const vacios = filas.length ? 0 : vaciosAntes + 1;
+  return { dias: filas.length, vacios, siguiente: vacios >= 2 || ini <= "1920-01-01" ? null : sumarDias(ini, -1) };
 }
 
 /** Guarda días del histórico de AEMET; solo pisa los que tienen pocas lecturas propias (menos de 20 en el día). */
@@ -212,7 +239,7 @@ async function guardarDiasAemet(db: D1Database, id: number, filas: ReturnType<ty
       d.racha_max, d.racha_max_ts, d.lluvia, d.temp_media, d.temp_media === null ? 0 : 1, d.viento_medio, d.viento_medio === null ? 0 : 1,
     ),
   );
-  for (let i = 0; i < lote.length; i += 50) await db.batch(lote.slice(i, i + 50));
+  for (let i = 0; i < lote.length; i += 100) await db.batch(lote.slice(i, i + 100));
 }
 
 /**

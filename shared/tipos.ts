@@ -196,6 +196,8 @@ export interface RespuestaEstacion {
   records: Extremos;
   /** Primer día con datos */
   desde: string | null;
+  /** Histórico que se está trayendo todavía de otra red (poco a poco, hacia atrás): de dónde y por qué día va */
+  importando: { red: string; hasta: string } | null;
 }
 
 export interface PrevisionHora {

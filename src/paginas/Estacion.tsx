@@ -215,6 +215,13 @@ export default function Estacion({ slug, prevision }: Props) {
         }
       />
 
+      {e.importando && (
+        <p className="aviso-importando suave pequeno">
+          ⏳ Trayendo el histórico de {e.importando.red}, poco a poco y hacia atrás: de momento hay datos desde el{" "}
+          {fechaCorta(e.desde ?? e.importando.hasta, true)}. Se completa solo{" "}
+          {e.importando.red === "AEMET" ? "en unas horas" : "en unos días (Weather Underground da un día por consulta, con un máximo diario)"}.
+        </p>
+      )}
       {!a ? (
         <p className="vacio">Todavía no hay datos de la estación.</p>
       ) : (
