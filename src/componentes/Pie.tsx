@@ -1,9 +1,10 @@
 import type { RespuestaRed, UsuarioSesion } from "../../shared/tipos";
+import { enDirecto as enDirectoEstacion } from "../estaciones";
 import { hora } from "../formato";
 import { Logo } from "./Cabecera";
 
 export default function Pie({ red, usuario }: { red: RespuestaRed | null; usuario: UsuarioSesion | null }) {
-  const enDirecto = red?.estaciones.filter((d) => d.actual && red.ahora - d.actual.ts < (d.estacion.fuente === "aemet" ? 5400 : 1200)).length ?? 0;
+  const enDirecto = red?.estaciones.filter((d) => enDirectoEstacion(d, red.ahora)).length ?? 0;
   return (
     <footer className="pie">
       <div className="pie-dentro">

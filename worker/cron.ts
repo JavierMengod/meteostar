@@ -9,6 +9,8 @@ import { fechaLocal } from "./fechas";
 const MAX_POR_MINUTO = 25;
 /** El envío directo pasa a la reserva si la consola lleva este tiempo callada. */
 const SILENCIO_DIRECTO = 150;
+/** AEMET: desde la hora de su último dato, cuándo puede estar ya publicado el siguiente (1 h + unos 35 min) */
+const ESPERA_AEMET = 95 * 60;
 
 /** Lee una estación ahora mismo con su conector. Devuelve cuántas lecturas nuevas se han guardado. */
 export async function leerEstacion(env: Env, f: FilaEstacion, ahora: number): Promise<number> {
@@ -32,6 +34,11 @@ async function toca(env: Env, f: FilaEstacion, ahora: number): Promise<boolean> 
   const con = conector(f.fuente);
   if (!con?.leer) return false;
   if (f.ultima_consulta && ahora - f.ultima_consulta < con.intervalo * 60 - 10) return false;
+  if (f.fuente === "aemet") {
+    // AEMET da un dato por hora y lo publica unos 40 minutos después: solo se pide cuando ya puede haber uno nuevo
+    const ultima = await ultimaLectura(env.DB, f.id);
+    return !ultima || ahora - ultima.ts >= ESPERA_AEMET;
+  }
   if (f.fuente === "directo") {
     // Solo si tiene reserva configurada y la consola lleva un rato sin enviar
     if (!f.config) return false;

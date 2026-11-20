@@ -19,7 +19,7 @@ export default function TarjetaEstacion({ d, escala, accion }: { d: RespuestaDat
           </p>
         </div>
         <span className="te-acciones">
-          <Directo lectura={a} ahora={d.ahora} />
+          <Directo lectura={a} ahora={d.ahora} fuente={e.fuente} />
           {accion}
         </span>
       </div>

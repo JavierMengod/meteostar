@@ -277,9 +277,10 @@ export const CONECTORES: Conector[] = [
   {
     id: "aemet",
     nombre: "AEMET (oficial)",
-    descripcion: "Observaciones horarias de una estación de AEMET, cada 30 minutos.",
+    descripcion: "Observaciones horarias de una estación de AEMET: cada dato se recoge en cuanto AEMET lo publica (unos 40 minutos después de la hora).",
     modo: "consulta",
-    intervalo: 30,
+    // Se mira cada 10 minutos, pero solo cuando ya toca dato nuevo (ver «toca» en cron.ts)
+    intervalo: 10,
     campos: [
       { nombre: "idema", etiqueta: "Indicativo de la estación", tipo: "texto", obligatorio: true, ejemplo: "8368U (Teruel)" },
       { nombre: "api_key", etiqueta: "Clave de AEMET OpenData", tipo: "secreto", obligatorio: false, ayuda: "Si se deja vacía, se usa la clave general de la web" },

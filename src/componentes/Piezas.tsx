@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import type { Lectura } from "../../shared/tipos";
 import { conSigno, n } from "../formato";
+import { margenDirecto } from "../estaciones";
 import Paisaje, { type Fase } from "./Paisaje";
 
 export function Hero({
@@ -83,9 +84,10 @@ export function Tendencia({ actual, antes, unidad, sufijo }: { actual: number | 
   );
 }
 
-export function Directo({ lectura, ahora }: { lectura: Lectura | null; ahora: number }) {
+/** Punto «en directo» con la hora del último dato; se apaga si el dato es viejo para lo que publica su red. */
+export function Directo({ lectura, ahora, fuente }: { lectura: Lectura | null; ahora: number; fuente?: string }) {
   if (!lectura) return <span className="directo apagado">Sin datos</span>;
-  const viejo = ahora - lectura.ts > 600;
+  const viejo = ahora - lectura.ts > margenDirecto(fuente);
   return (
     <span className={viejo ? "directo apagado" : "directo"}>
       <i />
