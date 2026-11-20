@@ -4244,3 +4244,28 @@ h3 {
   margin: 0 0 10px;
   font-size: 0.9rem;
 }
+
+/* Administración: usuarios */
+.fila-usuario.inactivo > div:first-child {
+  opacity: 0.6;
+}
+.acciones-usuario {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.nueva-contrasena {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.nueva-contrasena input {
+  min-width: 240px;
+  flex: 1;
+}
+
+.boton-secundario.pequeno {
+  padding: 5px 12px;
+  font-size: 0.85rem;
+}

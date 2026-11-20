@@ -3,15 +3,31 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import type { EmbalseCatalogo, EstacionPropia, Invitacion, RespuestaEmbalses } from "../../shared/tipos";
 import { CabeceraSeccion, Cargando } from "../componentes/Piezas";
 import { enviar, navegar, usePeticion, useSesion } from "../datos";
-import { fechaCorta, fechaDe } from "../formato";
+import { fechaCorta, fechaDe, hace } from "../formato";
 import { Campo } from "./Acceso";
 import { FilaEstacionPropia } from "./Cuenta";
 import GestionRios from "./GestionRios";
 
 const GestionExternas = lazy(() => import("./GestionExternas"));
 
+interface UsuarioAdmin {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+  creado: number;
+  activo: number;
+  ultimo_acceso: number | null;
+  /** Estaciones propias y de otras redes (AEMET, Meteoclimatic, Weather Underground) que ha dado de alta */
+  estaciones: number;
+  externas: number;
+}
+
+/** Estaciones de otras redes que puede dar de alta cada usuario (el administrador, sin límite) */
+const MAX_EXTERNAS_USUARIO = 5;
+
 interface ResumenAdmin {
-  usuarios: { id: number; nombre: string; email: string; rol: string; creado: number; estaciones: number }[];
+  usuarios: UsuarioAdmin[];
   invitaciones: Invitacion[];
   estaciones: EstacionPropia[];
 }
@@ -66,19 +82,14 @@ export default function Admin() {
       <CabeceraSeccion id="rios" titulo="Ríos" nota="Aforos de cualquier cuenca que gestiona el Estado. «Por defecto»: los que ve destacados quien no tiene cuenta." />
       <GestionRios />
 
-      <CabeceraSeccion titulo="Usuarios" />
+      <CabeceraSeccion
+        id="usuarios"
+        titulo="Usuarios"
+        nota="Si alguien olvida su contraseña, pónsela nueva aquí y díselo. Al eliminar una cuenta, sus estaciones pasan a ti."
+      />
       <div className="tarjeta tabla-simple">
         {datos.usuarios.map((u) => (
-          <div key={u.id} className="fila-propia">
-            <div>
-              <b>
-                {u.nombre} {u.rol === "admin" && <span className="insignia">Admin</span>}
-              </b>
-              <small>
-                {u.email} · desde el {fechaCorta(fechaDe(u.creado), true)} · {u.estaciones} {u.estaciones === 1 ? "estación" : "estaciones"}
-              </small>
-            </div>
-          </div>
+          <FilaUsuario key={u.id} u={u} yo={u.id === sesion.usuario?.id} ahora={ahora} recargar={recargar} />
         ))}
       </div>
     </>
@@ -265,5 +276,100 @@ function GestionEmbalses() {
       )}
       {error && <p className="error-form">{error}</p>}
     </section>
+  );
+}
+
+/** Un usuario, con lo que puede hacer el administrador (a sí mismo no: para eso está «Mi cuenta»). */
+function FilaUsuario({ u, yo, ahora, recargar }: { u: UsuarioAdmin; yo: boolean; ahora: number; recargar: () => Promise<void> }) {
+  const [cambiando, setCambiando] = useState(false);
+  const [nueva, setNueva] = useState("");
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
+  const hacer = async (accion: () => Promise<unknown>, ok?: string) => {
+    setAviso(null);
+    try {
+      await accion();
+      if (ok) setAviso({ ok: true, texto: ok });
+      await recargar();
+    } catch (e) {
+      setAviso({ ok: false, texto: e instanceof Error ? e.message : String(e) });
+    }
+  };
+  const ponerContrasena = () =>
+    hacer(async () => {
+      await enviar(`/api/admin/usuarios/${u.id}/contrasena`, "PUT", { nueva });
+      setCambiando(false);
+      setNueva("");
+    }, `Contraseña cambiada. Dísela a ${u.nombre}: ya puede entrar con ella (se le han cerrado las sesiones abiertas).`);
+  return (
+    <div className={`fila-propia fila-usuario ${u.activo ? "" : "inactivo"}`}>
+      <div>
+        <b>
+          {u.nombre} {u.rol === "admin" && <span className="insignia">Admin</span>}
+          {!u.activo && <span className="insignia gris">Desactivada</span>}
+          {yo && <span className="insignia gris">Tú</span>}
+        </b>
+        <small>
+          {u.email} · desde el {fechaCorta(fechaDe(u.creado), true)} · {u.ultimo_acceso ? `entró ${hace(ahora - u.ultimo_acceso)}` : "aún no ha entrado"}
+        </small>
+        <small>
+          {u.estaciones} {u.estaciones === 1 ? "estación propia" : "estaciones propias"} · {u.externas}
+          {u.rol === "admin" ? "" : ` de ${MAX_EXTERNAS_USUARIO}`} de otras redes
+        </small>
+        {aviso && <small className={aviso.ok ? "ok-form" : "error-form"}>{aviso.texto}</small>}
+      </div>
+      {!yo && (
+        <div className="acciones-usuario">
+          {cambiando ? (
+            <form
+              className="nueva-contrasena"
+              onSubmit={(e) => {
+                e.preventDefault();
+                ponerContrasena();
+              }}
+            >
+              <input
+                type="text"
+                value={nueva}
+                minLength={10}
+                autoComplete="off"
+                placeholder="Nueva contraseña (10 caracteres o más)"
+                onChange={(e) => setNueva(e.target.value)}
+                aria-label={`Nueva contraseña para ${u.nombre}`}
+              />
+              <button className="boton-principal pequeno" disabled={nueva.length < 10}>
+                Guardar
+              </button>
+              <button type="button" className="boton-secundario pequeno" onClick={() => setCambiando(false)}>
+                Cancelar
+              </button>
+            </form>
+          ) : (
+            <>
+              <button className="boton-secundario pequeno" onClick={() => setCambiando(true)}>
+                Poner contraseña
+              </button>
+              <button
+                className="boton-secundario pequeno"
+                onClick={() => hacer(() => enviar(`/api/admin/usuarios/${u.id}/rol`, "PUT", { rol: u.rol === "admin" ? "usuario" : "admin" }))}
+              >
+                {u.rol === "admin" ? "Quitar admin" : "Hacer admin"}
+              </button>
+              <button className="boton-secundario pequeno" onClick={() => hacer(() => enviar(`/api/admin/usuarios/${u.id}/activo`, "PUT", { activo: !u.activo }))}>
+                {u.activo ? "Desactivar" : "Activar"}
+              </button>
+              <button
+                className="boton-secundario pequeno peligro"
+                onClick={() =>
+                  confirm(`¿Eliminar la cuenta de ${u.nombre}? Sus estaciones (y sus datos) pasan a ser tuyas. No se puede deshacer.`) &&
+                  hacer(() => enviar(`/api/admin/usuarios/${u.id}`, "DELETE"))
+                }
+              >
+                Eliminar
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

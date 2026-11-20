@@ -63,7 +63,10 @@ export function emailValido(e: unknown): e is string {
 export async function crearSesion(c: Contexto, usuarioId: number) {
   const token = aleatorio(32);
   const caduca = Math.floor(Date.now() / 1000) + DURACION_SESION;
-  await c.env.DB.prepare("INSERT INTO sesiones (id, usuario_id, caduca) VALUES (?, ?, ?)").bind(await sha256(token), usuarioId, caduca).run();
+  await c.env.DB.batch([
+    c.env.DB.prepare("INSERT INTO sesiones (id, usuario_id, caduca) VALUES (?, ?, ?)").bind(await sha256(token), usuarioId, caduca),
+    c.env.DB.prepare("UPDATE usuarios SET ultimo_acceso = unixepoch() WHERE id = ?").bind(usuarioId),
+  ]);
   setCookie(c, COOKIE, token, {
     httpOnly: true,
     secure: new URL(c.req.url).protocol === "https:",
@@ -79,14 +82,51 @@ export async function cerrarSesion(c: Contexto) {
   deleteCookie(c, COOKIE, { path: "/" });
 }
 
-/** Usuario de la sesión actual, o null. */
+/** Identificador (guardado) de la sesión actual, o null. */
+export async function sesionActual(c: Contexto): Promise<string | null> {
+  const token = getCookie(c, COOKIE);
+  return token ? sha256(token) : null;
+}
+
+/** Usuario de la sesión actual, o null (también si su cuenta está desactivada). */
 export async function usuarioActual(c: Contexto): Promise<Usuario | null> {
   const token = getCookie(c, COOKIE);
   if (!token) return null;
   return c.env.DB.prepare(
     `SELECT u.id, u.email, u.nombre, u.rol, u.tema FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id
-     WHERE s.id = ? AND s.caduca > unixepoch()`,
+     WHERE s.id = ? AND s.caduca > unixepoch() AND u.activo = 1`,
   )
     .bind(await sha256(token))
     .first<Usuario>();
+}
+
+// ----- Freno a los intentos de entrar a ciegas -----
+
+/** Fallos seguidos con los que se bloquea un email, y durante cuánto */
+const MAX_FALLOS = 10;
+const VENTANA_FALLOS = 15 * 60;
+
+/** Segundos que le quedan bloqueado a ese email (0 si puede intentarlo). */
+export async function bloqueoAcceso(db: D1Database, email: string): Promise<number> {
+  const hasta = await db.prepare("SELECT bloqueado_hasta FROM intentos_acceso WHERE email = ?").bind(email).first<number | null>("bloqueado_hasta");
+  return Math.max(0, (hasta ?? 0) - Math.floor(Date.now() / 1000));
+}
+
+/** Apunta un fallo (y bloquea si ya van demasiados en poco tiempo). */
+export async function apuntarFallo(db: D1Database, email: string) {
+  await db
+    .prepare(
+      `INSERT INTO intentos_acceso (email, fallos, desde) VALUES (?1, 1, unixepoch())
+       ON CONFLICT (email) DO UPDATE SET
+         fallos = CASE WHEN desde < unixepoch() - ?2 THEN 1 ELSE fallos + 1 END,
+         desde = CASE WHEN desde < unixepoch() - ?2 THEN unixepoch() ELSE desde END,
+         bloqueado_hasta = CASE WHEN desde >= unixepoch() - ?2 AND fallos + 1 >= ?3 THEN unixepoch() + ?2 ELSE bloqueado_hasta END`,
+    )
+    .bind(email, VENTANA_FALLOS, MAX_FALLOS)
+    .run();
+}
+
+/** Al entrar bien, se olvidan los fallos. */
+export async function olvidarFallos(db: D1Database, email: string) {
+  await db.prepare("DELETE FROM intentos_acceso WHERE email = ?").bind(email).run();
 }

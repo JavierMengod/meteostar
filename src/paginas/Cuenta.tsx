@@ -94,7 +94,7 @@ export default function Cuenta() {
 
       <CabeceraSeccion titulo="Mi perfil" />
       <SelectorTema />
-      <Perfil nombre={c.usuario.nombre} recargar={async () => (await recargar(), await sesion.recargar())} />
+      <Perfil nombre={c.usuario.nombre} email={c.usuario.email} recargar={async () => (await recargar(), await sesion.recargar())} />
     </>
   );
 }
@@ -170,10 +170,15 @@ function Lugares({ ubicaciones, recargar }: { ubicaciones: Ubicacion[]; recargar
   );
 }
 
-function Perfil({ nombre: inicial, recargar }: { nombre: string; recargar: () => Promise<unknown> }) {
+function Perfil({ nombre: inicial, email: emailInicial, recargar }: { nombre: string; email: string; recargar: () => Promise<unknown> }) {
+  const sesion = useSesion();
   const [nombre, setNombre] = useState(inicial);
   const [actual, setActual] = useState("");
   const [nueva, setNueva] = useState("");
+  const [email, setEmail] = useState(emailInicial);
+  const [claveEmail, setClaveEmail] = useState("");
+  const [claveBorrar, setClaveBorrar] = useState("");
+  const [borrando, setBorrando] = useState(false);
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
   const ejecutar = async (f: () => Promise<unknown>, ok: string) => {
     setMensaje(null);
@@ -218,7 +223,71 @@ function Perfil({ nombre: inicial, recargar }: { nombre: string; recargar: () =>
         </Campo>
         <button className="boton-secundario">Cambiar contraseña</button>
       </form>
-      {mensaje && <p className={mensaje.ok ? "ok-form" : "error-form"}>{mensaje.texto}</p>}
+      <form
+        className="tarjeta formulario-simple"
+        onSubmit={(e) => {
+          e.preventDefault();
+          ejecutar(async () => {
+            await enviar("/api/cuenta/email", "PUT", { email, contrasena: claveEmail });
+            setClaveEmail("");
+          }, "Email cambiado: a partir de ahora entras con el nuevo.");
+        }}
+      >
+        <Campo etiqueta="Email (con el que entras)">
+          <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Campo>
+        <Campo etiqueta="Tu contraseña" ayuda="Para confirmar que eres tú">
+          <input type="password" autoComplete="current-password" required value={claveEmail} onChange={(e) => setClaveEmail(e.target.value)} />
+        </Campo>
+        <button className="boton-secundario" disabled={email === emailInicial}>
+          Cambiar email
+        </button>
+      </form>
+      <div className="tarjeta formulario-simple">
+        <p className="suave pequeno">¿Has entrado en un ordenador o un móvil que no es tuyo? Cierra allí tu sesión desde aquí.</p>
+        <button
+          className="boton-secundario"
+          onClick={() =>
+            ejecutar(async () => {
+              const r = await enviar<{ cerradas: number }>("/api/cuenta/cerrar-sesiones", "POST");
+              setMensaje({ ok: true, texto: r.cerradas ? `Cerradas ${r.cerradas} sesiones en otros dispositivos.` : "No tenías ninguna otra sesión abierta." });
+            }, "")
+          }
+        >
+          Cerrar sesión en los demás dispositivos
+        </button>
+        {borrando ? (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!confirm("¿Borrar tu cuenta? Tus estaciones no se pierden: pasan al administrador. No se puede deshacer.")) return;
+              setMensaje(null);
+              try {
+                await enviar("/api/cuenta", "DELETE", { contrasena: claveBorrar });
+                await sesion.recargar();
+                navegar("/");
+              } catch (err) {
+                setMensaje({ ok: false, texto: err instanceof Error ? err.message : String(err) });
+              }
+            }}
+          >
+            <Campo etiqueta="Tu contraseña" ayuda="Para confirmar que quieres borrar la cuenta">
+              <input type="password" autoComplete="current-password" required value={claveBorrar} onChange={(e) => setClaveBorrar(e.target.value)} />
+            </Campo>
+            <div className="acciones">
+              <button className="boton-secundario peligro">Borrar mi cuenta</button>
+              <button type="button" className="boton-secundario" onClick={() => setBorrando(false)}>
+                Cancelar
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button className="boton-secundario peligro" onClick={() => setBorrando(true)}>
+            Borrar mi cuenta…
+          </button>
+        )}
+      </div>
+      {mensaje && mensaje.texto && <p className={mensaje.ok ? "ok-form" : "error-form"}>{mensaje.texto}</p>}
     </div>
   );
 }

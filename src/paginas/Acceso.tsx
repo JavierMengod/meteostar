@@ -81,6 +81,9 @@ export function Entrar() {
       <Campo etiqueta="Contraseña">
         <input type="password" autoComplete="current-password" required value={contrasena} onChange={(e) => setContrasena(e.target.value)} />
       </Campo>
+      <p className="suave pequeno">
+        ¿Has olvidado la contraseña? Pídele al administrador que te ponga una nueva; luego podrás cambiarla en «Mi cuenta».
+      </p>
       <p className="suave pequeno">Meteostar funciona por invitación. Si quieres añadir tu estación, pide una invitación al administrador.</p>
     </Formulario>
   );

@@ -5,14 +5,18 @@ import { fechaLocal } from "../fechas";
 import type { Invitacion, RespuestaCuenta, Ubicacion } from "../../shared/tipos";
 import {
   aleatorio,
+  apuntarFallo,
+  bloqueoAcceso,
   cerrarSesion,
   comprobarContrasena,
   contrasenaValida,
   crearSesion,
   emailValido,
   hashContrasena,
-  usuarioActual,
+  olvidarFallos,
+  sesionActual,
   type Usuario,
+  usuarioActual,
 } from "../auth";
 import { esTema } from "../../shared/temas";
 import { infoConectores } from "../conectores";
@@ -67,6 +71,31 @@ function validarAlta(b: Record<string, any>): string | null {
   if (!texto(b.nombre)) return "Escribe tu nombre";
   if (!emailValido(b.email)) return "El email no es válido";
   if (!contrasenaValida(b.contrasena)) return "La contraseña debe tener al menos 10 caracteres";
+  return null;
+}
+
+/** ¿Es esa la contraseña del usuario? */
+async function contrasenaCorrecta(db: D1Database, id: number, contrasena: unknown): Promise<boolean> {
+  if (typeof contrasena !== "string") return false;
+  const f = await db.prepare("SELECT hash, sal FROM usuarios WHERE id = ?").bind(id).first<{ hash: string; sal: string }>();
+  return !!f && (await comprobarContrasena(contrasena, f.hash, f.sal));
+}
+
+/**
+ * Borra una cuenta. Sus estaciones (con sus datos) pasan a «paraQuien» o, si no se dice, al primer administrador:
+ * nunca se pierden datos al borrar una cuenta. Nunca deja la web sin ningún administrador. Devuelve el error, o null.
+ */
+async function borrarUsuario(db: D1Database, id: number, paraQuien?: number): Promise<string | null> {
+  const destino =
+    paraQuien ??
+    (await db.prepare("SELECT id FROM usuarios WHERE rol = 'admin' AND activo = 1 AND id <> ? ORDER BY creado LIMIT 1").bind(id).first<number>("id"));
+  if (!destino) return "Es la única cuenta de administrador: antes, haz administrador a otra persona";
+  await db.batch([
+    db.prepare("UPDATE estaciones SET usuario_id = ? WHERE usuario_id = ?").bind(destino, id),
+    db.prepare("UPDATE invitaciones SET creada_por = NULL WHERE creada_por = ?").bind(id),
+    db.prepare("UPDATE invitaciones SET usada_por = NULL WHERE usada_por = ?").bind(id),
+    db.prepare("DELETE FROM usuarios WHERE id = ?").bind(id),
+  ]);
   return null;
 }
 
@@ -142,14 +171,21 @@ app.post("/auth/registro", async (c) => {
 app.post("/auth/entrar", async (c) => {
   const b = await cuerpo(c);
   if (!b) return c.json({ error: "Petición no válida" }, 400);
-  const fila = await c.env.DB.prepare("SELECT id, hash, sal FROM usuarios WHERE email = ?")
-    .bind(texto(b.email, 200))
-    .first<{ id: number; hash: string; sal: string }>();
+  const email = texto(b.email, 200);
+  // Tras muchos fallos seguidos con un email, se bloquea un rato (aunque luego acierte)
+  const bloqueo = await bloqueoAcceso(c.env.DB, email);
+  if (bloqueo) return c.json({ error: `Demasiados intentos. Vuelve a probar dentro de ${Math.ceil(bloqueo / 60)} minutos.` }, 429);
+  const fila = await c.env.DB.prepare("SELECT id, hash, sal, activo FROM usuarios WHERE email = ?")
+    .bind(email)
+    .first<{ id: number; hash: string; sal: string; activo: number }>();
   const ok = fila && typeof b.contrasena === "string" && (await comprobarContrasena(b.contrasena, fila.hash, fila.sal));
   if (!ok) {
+    await apuntarFallo(c.env.DB, email);
     await esperar(800); // frena los intentos a ciegas
     return c.json({ error: "Email o contraseña incorrectos" }, 401);
   }
+  await olvidarFallos(c.env.DB, email);
+  if (!fila.activo) return c.json({ error: "Esta cuenta está desactivada. Habla con el administrador." }, 403);
   await crearSesion(c, fila.id);
   return c.json({ ok: true });
 });
@@ -232,6 +268,44 @@ app.put("/cuenta/contrasena", async (c) => {
   // Cierra las demás sesiones
   await c.env.DB.prepare("DELETE FROM sesiones WHERE usuario_id = ?").bind(u.id).run();
   await crearSesion(c, u.id);
+  return c.json({ ok: true });
+});
+
+/** Cambiar el email (con la contraseña). */
+app.put("/cuenta/email", async (c) => {
+  const b = await cuerpo(c);
+  const u = c.get("usuario");
+  const email = texto(b?.email, 200);
+  if (!emailValido(email)) return c.json({ error: "El email no es válido" }, 400);
+  if (!(await contrasenaCorrecta(c.env.DB, u.id, b?.contrasena))) {
+    await esperar(800);
+    return c.json({ error: "La contraseña no es correcta" }, 403);
+  }
+  if (await c.env.DB.prepare("SELECT 1 FROM usuarios WHERE email = ? AND id <> ?").bind(email, u.id).first()) {
+    return c.json({ error: "Ya hay una cuenta con ese email" }, 409);
+  }
+  await c.env.DB.prepare("UPDATE usuarios SET email = ? WHERE id = ?").bind(email, u.id).run();
+  return c.json({ ok: true });
+});
+
+/** Cerrar la sesión en los demás dispositivos (la de este, no). */
+app.post("/cuenta/cerrar-sesiones", async (c) => {
+  const actual = await sesionActual(c);
+  const r = await c.env.DB.prepare("DELETE FROM sesiones WHERE usuario_id = ? AND id <> ?").bind(c.get("usuario").id, actual ?? "").run();
+  return c.json({ cerradas: r.meta.changes ?? 0 });
+});
+
+/** Borrar la propia cuenta (con la contraseña). Sus estaciones no se pierden: pasan al administrador. */
+app.delete("/cuenta", async (c) => {
+  const b = await cuerpo(c);
+  const u = c.get("usuario");
+  if (!(await contrasenaCorrecta(c.env.DB, u.id, b?.contrasena))) {
+    await esperar(800);
+    return c.json({ error: "La contraseña no es correcta" }, 403);
+  }
+  const r = await borrarUsuario(c.env.DB, u.id);
+  if (r) return c.json({ error: r }, 400);
+  await cerrarSesion(c);
   return c.json({ ok: true });
 });
 
@@ -372,8 +446,10 @@ app.get("/admin/resumen", async (c) => {
   const db = c.env.DB;
   const usuarios = await db
     .prepare(
-      `SELECT u.id, u.nombre, u.email, u.rol, u.creado, (SELECT count(*) FROM estaciones e WHERE e.usuario_id = u.id) AS estaciones
-       FROM usuarios u ORDER BY u.creado`,
+      `SELECT u.id, u.nombre, u.email, u.rol, u.creado, u.activo, u.ultimo_acceso,
+         (SELECT count(*) FROM estaciones e WHERE e.usuario_id = u.id AND e.tipo = 'particular') AS estaciones,
+         (SELECT count(*) FROM estaciones e WHERE e.usuario_id = u.id AND e.tipo IN ('externa', 'oficial')) AS externas
+       FROM usuarios u ORDER BY u.activo DESC, u.creado`,
     )
     .all();
   const invitaciones = await db
@@ -388,6 +464,56 @@ app.get("/admin/resumen", async (c) => {
     invitaciones: invitaciones.results,
     estaciones: await Promise.all(filas.map((f) => vistaPropia(c.env, f))),
   });
+});
+
+/** El usuario sobre el que actúa el administrador (nunca él mismo: para eso está «Mi cuenta»). */
+async function otroUsuario(c: { env: Env; req: { param(n: string): string }; get(k: "usuario"): Usuario }) {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id === c.get("usuario").id) return null;
+  return c.env.DB.prepare("SELECT id, rol, activo FROM usuarios WHERE id = ?").bind(id).first<{ id: number; rol: string; activo: number }>();
+}
+
+/** Poner una contraseña nueva a un usuario (si la ha olvidado). Se cierran sus sesiones. */
+app.put("/admin/usuarios/:id/contrasena", async (c) => {
+  const u = await otroUsuario(c);
+  if (!u) return c.json({ error: "Usuario no encontrado" }, 404);
+  const b = await cuerpo(c);
+  if (!contrasenaValida(b?.nueva)) return c.json({ error: "La contraseña debe tener al menos 10 caracteres" }, 400);
+  const { hash, sal } = await hashContrasena(b!.nueva);
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE usuarios SET hash = ?, sal = ? WHERE id = ?").bind(hash, sal, u.id),
+    c.env.DB.prepare("DELETE FROM sesiones WHERE usuario_id = ?").bind(u.id),
+  ]);
+  return c.json({ ok: true });
+});
+
+/** Hacer administrador a un usuario o quitárselo. */
+app.put("/admin/usuarios/:id/rol", async (c) => {
+  const u = await otroUsuario(c);
+  if (!u) return c.json({ error: "Usuario no encontrado" }, 404);
+  const rol = (await cuerpo(c))?.rol === "admin" ? "admin" : "usuario";
+  await c.env.DB.prepare("UPDATE usuarios SET rol = ? WHERE id = ?").bind(rol, u.id).run();
+  return c.json({ ok: true });
+});
+
+/** Desactivar una cuenta (no puede entrar; sus estaciones siguen funcionando) o volver a activarla. */
+app.put("/admin/usuarios/:id/activo", async (c) => {
+  const u = await otroUsuario(c);
+  if (!u) return c.json({ error: "Usuario no encontrado" }, 404);
+  const activo = (await cuerpo(c))?.activo ? 1 : 0;
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE usuarios SET activo = ? WHERE id = ?").bind(activo, u.id),
+    ...(activo ? [] : [c.env.DB.prepare("DELETE FROM sesiones WHERE usuario_id = ?").bind(u.id)]),
+  ]);
+  return c.json({ ok: true });
+});
+
+/** Eliminar una cuenta. Sus estaciones no se pierden: pasan al administrador que la elimina. */
+app.delete("/admin/usuarios/:id", async (c) => {
+  const u = await otroUsuario(c);
+  if (!u) return c.json({ error: "Usuario no encontrado" }, 404);
+  const r = await borrarUsuario(c.env.DB, u.id, c.get("usuario").id);
+  return r ? c.json({ error: r }, 400) : c.json({ ok: true });
 });
 
 app.post("/admin/invitaciones", async (c) => {
