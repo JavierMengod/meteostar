@@ -4235,3 +4235,12 @@ h3 {
   border-radius: 8px;
   background: var(--acento-suave);
 }
+
+/* Tabla «Mes a mes»: selector del año */
+.tabla-meses-anio {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}

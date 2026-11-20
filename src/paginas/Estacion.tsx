@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Estacion as InfoEstacion, Extremo, Extremos, PuntoHistorico, RespuestaDatos, RespuestaEstacion, RespuestaPrevision, ResumenDiario } from "../../shared/tipos";
+import type { Estacion as InfoEstacion, Extremo, Extremos, PuntoHistorico, RespuestaDatos, RespuestaEstacion, RespuestaPrevision, ResumenDiario, ResumenMes } from "../../shared/tipos";
 import { puntoCardinal } from "../../shared/meteo";
 import {
   crearMarco,
@@ -24,6 +24,7 @@ import {
   DiariaViento,
   prepararDias,
   TablaMeses,
+  mesesComoDias,
 } from "../componentes/GraficasDiarias";
 import { faseDelDia } from "../componentes/Paisaje";
 import { BarraMinMax, CabeceraSeccion, Cargando, Hero, Tendencia } from "../componentes/Piezas";
@@ -158,17 +159,24 @@ export default function Estacion({ slug, prevision }: Props) {
   const [horas, setHoras] = useState(24);
   const { datos: lecturas } = usePeticion<PuntoHistorico[]>(`${base}/historico?horas=${horas === 24 ? 48 : horas}`);
   const [periodoDias, setPeriodoDias] = useState(92);
-  const { datos: todosDias } = usePeticion<ResumenDiario[]>(`${base}/resumen?dias=todo`);
+  // Días del último año (gráficas de 30 días, 3 meses y año) y resumen de cada mes de todo el histórico
+  const { datos: diasAnio } = usePeticion<ResumenDiario[]>(`${base}/resumen?dias=366`);
+  const { datos: meses } = usePeticion<ResumenMes[]>(`${base}/meses`);
   // Día de «Consultar un día» (también se elige pulsando un día en las gráficas diarias)
   const [diaConsulta, setDiaConsulta] = useState<string | null>(null);
   const corte = e ? e.ahora - horas * 3600 : 0;
   const historico = useMemo(() => lecturas?.filter((p) => p.t >= corte) ?? null, [lecturas, corte]);
   const ayer = useMemo(() => (horas === 24 ? (lecturas?.filter((p) => p.t < corte) ?? []) : undefined), [lecturas, corte, horas]);
+  // «Todo» con más de un año de histórico: por meses (con décadas de datos, día a día no se vería nada)
+  const porMeses = periodoDias === 0 && !!e?.desde && !!e && e.desde < sumarDias(fechaDe(e.ahora), -365);
   const diasGrafica = useMemo(() => {
-    if (!todosDias || !e) return [];
+    if (!e) return [];
+    if (porMeses) return meses ? mesesComoDias(meses) : [];
+    if (!diasAnio) return [];
     const desde = periodoDias ? sumarDias(fechaDe(e.ahora), -(periodoDias - 1)) : "";
-    return prepararDias(todosDias.filter((d) => d.fecha >= desde));
-  }, [todosDias, periodoDias, e]);
+    return prepararDias(diasAnio.filter((d) => d.fecha >= desde));
+  }, [diasAnio, meses, porMeses, periodoDias, e]);
+  const cada = porMeses ? "cada mes" : "cada día";
   const { datos: h24 } = usePeticion<PuntoHistorico[]>(`${base}/historico?horas=24`);
 
   if (errorInfo === "no encontrado") return <p className="vacio">Esta estación no existe. <a href="/">Volver a la portada</a></p>;
@@ -545,7 +553,10 @@ export default function Estacion({ slug, prevision }: Props) {
 
       {diasGrafica.length > 1 && (
         <>
-          <CabeceraSeccion titulo="Día a día" nota="El resumen de cada día · pulsa un día para ver todos sus datos" />
+          <CabeceraSeccion
+            titulo="Día a día"
+            nota={porMeses ? "Todo el histórico, mes a mes" : "El resumen de cada día · pulsa un día para ver todos sus datos"}
+          />
           <div className="periodos" role="tablist">
             {PERIODOS_DIAS.map((p) => (
               <button key={p.dias} role="tab" aria-selected={periodoDias === p.dias} onClick={() => setPeriodoDias(p.dias)}>
@@ -554,22 +565,22 @@ export default function Estacion({ slug, prevision }: Props) {
             ))}
           </div>
           <div className="rejilla-2">
-            <Panel titulo="Temperatura" nota="°C · franja de la mínima a la máxima, y la media">
+            <Panel titulo="Temperatura" nota={porMeses ? "°C · de la media de las mínimas a la de las máximas, y la media" : "°C · franja de la mínima a la máxima, y la media"}>
               <DiariaTemp dias={diasGrafica} onDia={setDiaConsulta} />
             </Panel>
-            <Panel titulo="Precipitación" nota="mm cada día · acumulado del periodo">
+            <Panel titulo="Precipitación" nota={`mm ${cada} · acumulado del periodo`}>
               <DiariaLluvia dias={diasGrafica} onDia={setDiaConsulta} />
             </Panel>
             <Panel titulo="Viento" nota="km/h · racha máxima y viento medio">
               <DiariaViento dias={diasGrafica} onDia={setDiaConsulta} />
             </Panel>
             {diasGrafica.some((d) => d.presion_max !== null) && (
-              <Panel titulo="Presión atmosférica" nota="hPa · mínima y máxima de cada día">
+              <Panel titulo="Presión atmosférica" nota={porMeses ? "hPa · medias de la mínima y la máxima diarias" : "hPa · mínima y máxima de cada día"}>
                 <DiariaPresion dias={diasGrafica} onDia={setDiaConsulta} />
               </Panel>
             )}
             {diasGrafica.some((d) => d.hum_max !== null) && (
-              <Panel titulo="Humedad" nota="% · mínima y máxima de cada día">
+              <Panel titulo="Humedad" nota={porMeses ? "% · medias de la mínima y la máxima diarias" : "% · mínima y máxima de cada día"}>
                 <DiariaHumedad dias={diasGrafica} onDia={setDiaConsulta} />
               </Panel>
             )}
@@ -579,15 +590,15 @@ export default function Estacion({ slug, prevision }: Props) {
               </Panel>
             )}
             {diasGrafica.some((d) => (d.rayos ?? 0) > 0) && (
-              <Panel titulo="Rayos" nota="detectados cada día">
+              <Panel titulo="Rayos" nota={`detectados ${cada}`}>
                 <DiariaRayos dias={diasGrafica} onDia={setDiaConsulta} />
               </Panel>
             )}
           </div>
-          {todosDias && todosDias.length > 0 && (
+          {meses && meses.length > 0 && (
             <>
               <CabeceraSeccion titulo="Mes a mes" nota="Medias, totales y días señalados de cada mes" />
-              <TablaMeses dias={todosDias} />
+              <TablaMeses meses={meses} />
             </>
           )}
         </>
@@ -736,7 +747,19 @@ function ExtremosAnio({ base, actual, anioActual, desde }: { base: string; actua
   const ex = anio === anioActual ? actual : otro;
   return (
     <div className="extremos-anio">
-      {anios.length > 1 && (
+      {/* Con muchos años (décadas de histórico), un desplegable; con pocos, botones */}
+      {anios.length > 5 ? (
+        <label className="tabla-meses-anio">
+          Año{" "}
+          <select value={anio} onChange={(ev) => setAnio(Number(ev.target.value))}>
+            {anios.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : anios.length > 1 && (
         <div className="periodos" role="tablist" aria-label="Año">
           {anios.map((y) => (
             <button key={y} role="tab" aria-selected={anio === y} onClick={() => setAnio(y)}>

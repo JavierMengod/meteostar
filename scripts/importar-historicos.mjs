@@ -75,18 +75,35 @@ const sentencia = (valores) => {
 /** AEMET OpenData: dos pasos; si pide una pausa (límite por minuto), espera y repite. */
 async function pedirAemet(ruta) {
   for (let intento = 0; intento < 20; intento++) {
-    const r1 = await fetch(`https://opendata.aemet.es/opendata/api${ruta}`, { headers: { api_key: CLAVE_AEMET } });
-    const p = JSON.parse(new TextDecoder("iso-8859-15").decode(await r1.arrayBuffer()));
+    let r1, p;
+    try {
+      r1 = await fetch(`https://opendata.aemet.es/opendata/api${ruta}`, { headers: { api_key: CLAVE_AEMET } });
+      p = JSON.parse(new TextDecoder("iso-8859-15").decode(await r1.arrayBuffer()));
+    } catch (e) {
+      // Sin respuesta o respuesta que no es JSON (AEMET a veces devuelve una página de error)
+      if (intento < 5) {
+        await espera(5_000);
+        continue;
+      }
+      throw e;
+    }
     if (p?.estado === 404 || /no hay datos/i.test(p?.descripcion ?? "")) return [];
     if (r1.status === 429 || /l.mite/i.test(p?.descripcion ?? "")) {
       process.stdout.write(" (AEMET pide una pausa: 1 min)");
       await espera(61_000);
       continue;
     }
-    if (p?.estado !== 200 || !p.datos) throw new Error(`AEMET: ${p?.descripcion ?? `HTTP ${r1.status}`}`);
+    // Fallo pasajero de AEMET (HTTP 500, respuesta a medias…): se reintenta unas veces antes de rendirse
+    if (p?.estado !== 200 || !p.datos) {
+      if (intento < 5) {
+        await espera(5_000);
+        continue;
+      }
+      throw new Error(`AEMET: ${p?.descripcion ?? `HTTP ${r1.status}`}`);
+    }
     const r2 = await fetch(p.datos);
-    if (r2.status === 429) {
-      await espera(61_000);
+    if (r2.status === 429 || (!r2.ok && intento < 5)) {
+      await espera(r2.status === 429 ? 61_000 : 5_000);
       continue;
     }
     if (!r2.ok) throw new Error(`AEMET HTTP ${r2.status}`);

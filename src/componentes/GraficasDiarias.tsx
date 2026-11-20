@@ -1,5 +1,6 @@
 // Gráficas «día a día»: el resumen de cada día (máxima, mínima, media, lluvia, racha…) a lo largo de semanas, meses
 // o años. Al pulsar un día se abre en «Consultar un día».
+import { useState } from "react";
 import {
   Area,
   Bar,
@@ -12,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { ResumenDiario } from "../../shared/tipos";
+import type { ResumenDiario, ResumenMes } from "../../shared/tipos";
 import { capital, fechaCompleta, n, nombreMes } from "../formato";
 
 /** Un día con sus medias calculadas, listo para las gráficas. */
@@ -52,7 +53,10 @@ export function prepararDias(dias: ResumenDiario[]): DiaGrafica[] {
 const ALTO = 220;
 const margen = { top: 4, right: 4, bottom: 0, left: -6 };
 const fmtCorto = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", timeZone: "UTC" });
-const etiquetaFecha = (f: string) => fmtCorto.format(Date.parse(`${f}T12:00:00Z`));
+const fmtMesCorto = new Intl.DateTimeFormat("es-ES", { month: "short", year: "numeric", timeZone: "UTC" });
+/** En las gráficas por meses, «fecha» es "aaaa-mm" */
+const esMes = (f: string) => f.length === 7;
+const etiquetaFecha = (f: string) => (esMes(f) ? fmtMesCorto.format(Date.parse(`${f}-15T12:00:00Z`)) : fmtCorto.format(Date.parse(`${f}T12:00:00Z`)));
 
 const ejeX = <XAxis dataKey="fecha" tickFormatter={etiquetaFecha} minTickGap={28} tick={{ className: "eje" }} stroke="var(--borde)" />;
 const ejeY = (props: Record<string, unknown> = {}) => <YAxis width={44} tick={{ className: "eje" }} stroke="var(--borde)" domain={["auto", "auto"]} {...props} />;
@@ -63,7 +67,7 @@ const leyenda = <Legend verticalAlign="top" align="left" height={26} iconType="p
 function tooltip(unidades: Record<string, string>, decimales: Record<string, number> = {}) {
   return (
     <Tooltip
-      labelFormatter={(f) => capital(fechaCompleta(String(f)))}
+      labelFormatter={(f) => capital(esMes(String(f)) ? nombreMes(String(f)) : fechaCompleta(String(f)))}
       formatter={(v, nombre) => {
         const d = decimales[String(nombre)] ?? 1;
         const u = unidades[String(nombre)] ?? "";
@@ -87,8 +91,8 @@ function Grafica({ dias, onDia, children }: Props & { children: React.ReactNode 
       <ComposedChart
         data={dias}
         margin={margen}
-        onClick={(s: any) => s?.activeLabel && onDia?.(String(s.activeLabel))}
-        style={onDia ? { cursor: "pointer" } : undefined}
+        onClick={(s: any) => s?.activeLabel && !esMes(String(s.activeLabel)) && onDia?.(String(s.activeLabel))}
+        style={onDia && !esMes(dias[0]?.fecha ?? "") ? { cursor: "pointer" } : undefined}
       >
         {rejilla}
         {ejeX}
@@ -96,6 +100,52 @@ function Grafica({ dias, onDia, children }: Props & { children: React.ReactNode 
       </ComposedChart>
     </ResponsiveContainer>
   );
+}
+
+/**
+ * Los meses como puntos de las gráficas (para «Todo» con años de histórico): la franja va de la media de las mínimas a
+ * la de las máximas, la lluvia es la del mes, la racha la máxima del mes…
+ */
+export function mesesComoDias(meses: ResumenMes[]): DiaGrafica[] {
+  let acumulado = 0;
+  return meses.map((m) => {
+    acumulado += m.lluvia;
+    const base: ResumenDiario = {
+      fecha: m.mes,
+      tmax: m.mediaMax,
+      tmax_ts: null,
+      tmin: m.mediaMin,
+      tmin_ts: null,
+      hum_max: m.humMax,
+      hum_min: m.humMin,
+      presion_max: m.presionMax,
+      presion_min: m.presionMin,
+      viento_max: null,
+      racha_max: m.racha,
+      racha_max_ts: null,
+      lluvia: m.lluvia,
+      intensidad_max: null,
+      intensidad_max_ts: null,
+      radiacion_max: null,
+      uv_max: null,
+      lecturas: 0,
+      rayos: m.rayos,
+      temp_suma: null,
+      temp_n: null,
+      viento_suma: null,
+      viento_n: null,
+      origen: null,
+    } as ResumenDiario;
+    return {
+      ...base,
+      temp_media: m.media,
+      viento_medio: m.vientoMedio,
+      rango_t: m.mediaMin !== null && m.mediaMax !== null ? [m.mediaMin, m.mediaMax] : null,
+      rango_p: m.presionMin !== null && m.presionMax !== null ? [m.presionMin, m.presionMax] : null,
+      rango_h: m.humMin !== null && m.humMax !== null ? [m.humMin, m.humMax] : null,
+      acumulado: r1(acumulado),
+    };
+  });
 }
 
 export function DiariaTemp(p: Props) {
@@ -118,9 +168,9 @@ export function DiariaLluvia(p: Props) {
     <Grafica {...p}>
       {ejeY({ yAxisId: "d", domain: [0, (m: number) => Math.max(5, Math.ceil(m))] })}
       {ejeY({ yAxisId: "a", orientation: "right", domain: [0, (m: number) => Math.max(10, Math.ceil(m))] })}
-      {tooltip({ "Lluvia del día": "mm", Acumulado: "mm" })}
+      {tooltip({ "Lluvia del día": "mm", "Lluvia del mes": "mm", Acumulado: "mm" })}
       {leyenda}
-      <Bar yAxisId="d" dataKey="lluvia" name="Lluvia del día" fill="var(--c-lluvia)" isAnimationActive={false} />
+      <Bar yAxisId="d" dataKey="lluvia" name={esMes(p.dias[0]?.fecha ?? "") ? "Lluvia del mes" : "Lluvia del día"} fill="var(--c-lluvia)" isAnimationActive={false} />
       <Line yAxisId="a" dataKey="acumulado" name="Acumulado" type="stepAfter" stroke="var(--c-intensidad)" dot={false} strokeWidth={1.8} isAnimationActive={false} />
     </Grafica>
   );
@@ -130,11 +180,11 @@ export function DiariaViento(p: Props) {
   return (
     <Grafica {...p}>
       {ejeY({ domain: [0, "auto"] })}
-      {tooltip({ "Racha máxima": "km/h", "Viento medio máximo": "km/h", "Viento medio del día": "km/h" })}
+      {tooltip({ "Racha máxima": "km/h", "Viento medio máximo": "km/h", "Viento medio del día": "km/h", "Viento medio del mes": "km/h" })}
       {leyenda}
       <Bar dataKey="racha_max" name="Racha máxima" fill="var(--c-racha)" fillOpacity={0.55} isAnimationActive={false} />
       <Line dataKey="viento_max" name="Viento medio máximo" stroke="var(--c-viento)" dot={false} strokeWidth={1.6} isAnimationActive={false} />
-      <Line dataKey="viento_medio" name="Viento medio del día" stroke="var(--c-viento)" strokeDasharray="4 3" dot={false} strokeWidth={1.4} isAnimationActive={false} />
+      <Line dataKey="viento_medio" name={esMes(p.dias[0]?.fecha ?? "") ? "Viento medio del mes" : "Viento medio del día"} stroke="var(--c-viento)" strokeDasharray="4 3" dot={false} strokeWidth={1.4} isAnimationActive={false} />
     </Grafica>
   );
 }
@@ -187,54 +237,24 @@ export function DiariaRayos(p: Props) {
 
 // ----- Tabla por meses -----
 
-interface Mes {
-  mes: string;
-  dias: number;
-  mediaMax: number | null;
-  mediaMin: number | null;
-  media: number | null;
-  lluvia: number;
-  diasLluvia: number;
-  racha: number | null;
-  heladas: number;
-  calor: number;
-  rayos: number | null;
-}
-
-const media = (v: (number | null)[]) => {
-  const x = v.filter((y): y is number => y !== null);
-  return x.length ? r1(x.reduce((a, b) => a + b, 0) / x.length) : null;
-};
-
-export function resumenMeses(dias: ResumenDiario[]): Mes[] {
-  const porMes = new Map<string, ResumenDiario[]>();
-  for (const d of dias) porMes.set(d.fecha.slice(0, 7), [...(porMes.get(d.fecha.slice(0, 7)) ?? []), d]);
-  return [...porMes.entries()]
-    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-    .map(([mes, l]) => {
-      const rachas = l.map((d) => d.racha_max).filter((v): v is number => v !== null);
-      const rayos = l.map((d) => d.rayos).filter((v): v is number => v !== null && v !== undefined);
-      return {
-        mes,
-        dias: l.length,
-        mediaMax: media(l.map((d) => d.tmax)),
-        mediaMin: media(l.map((d) => d.tmin)),
-        media: media(l.map(mediaTemp)),
-        lluvia: r1(l.reduce((s, d) => s + (d.lluvia ?? 0), 0)),
-        diasLluvia: l.filter((d) => (d.lluvia ?? 0) >= 0.2).length,
-        racha: rachas.length ? Math.max(...rachas) : null,
-        heladas: l.filter((d) => d.tmin !== null && d.tmin < 0).length,
-        calor: l.filter((d) => d.tmax !== null && d.tmax >= 30).length,
-        rayos: rayos.length ? rayos.reduce((a, b) => a + b, 0) : null,
-      };
-    });
-}
-
-export function TablaMeses({ dias }: { dias: ResumenDiario[] }) {
-  const meses = resumenMeses(dias);
+/** Tabla «Mes a mes» de un año (el que se elija; por defecto, el último con datos). */
+export function TablaMeses({ meses: todos }: { meses: ResumenMes[] }) {
+  const anios = [...new Set(todos.map((m) => m.mes.slice(0, 4)))].sort().reverse();
+  const [anio, setAnio] = useState(anios[0] ?? "");
+  const meses = todos.filter((m) => m.mes.startsWith(anio)).reverse();
   const conRayos = meses.some((m) => m.rayos !== null);
   return (
     <div className="tarjeta tabla-meses">
+      {anios.length > 1 && (
+        <label className="tabla-meses-anio">
+          Año{" "}
+          <select value={anio} onChange={(e) => setAnio(e.target.value)}>
+            {anios.map((a) => (
+              <option key={a}>{a}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <table>
         <thead>
           <tr>

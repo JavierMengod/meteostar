@@ -1,5 +1,5 @@
 // Acceso a la base de datos D1. Todas las lecturas y resúmenes son por estación.
-import type { Extremo, Extremos, Lectura, PuntoHistorico, ResumenDiario, VientoMinuto } from "../shared/tipos";
+import type { Extremo, Extremos, Lectura, PuntoHistorico, ResumenDiario, VientoMinuto, ResumenMes } from "../shared/tipos";
 import type { ExtremosDia } from "./conectores";
 import { fechaLocal } from "./fechas";
 
@@ -181,6 +181,30 @@ export async function resumenes(db: D1Database, estacionId: number, desde: strin
     .prepare("SELECT * FROM resumen_diario WHERE estacion_id = ? AND fecha >= ? ORDER BY fecha")
     .bind(estacionId, desde)
     .all<ResumenDiario>();
+  return r.results;
+}
+
+/**
+ * Resumen de cada mes de la estación, calculado por la base de datos (con décadas de histórico son unos pocos cientos
+ * de filas, en lugar de miles de días).
+ */
+export async function resumenMensual(db: D1Database, estacionId: number): Promise<ResumenMes[]> {
+  const r = await db
+    .prepare(
+      `SELECT substr(fecha, 1, 7) AS mes, count(*) AS dias,
+         round(avg(tmax), 1) AS mediaMax, round(avg(tmin), 1) AS mediaMin,
+         round(avg(CASE WHEN temp_n > 0 THEN temp_suma * 1.0 / temp_n
+                        WHEN tmax IS NOT NULL AND tmin IS NOT NULL THEN (tmax + tmin) / 2.0 END), 1) AS media,
+         max(tmax) AS tmax, min(tmin) AS tmin,
+         round(coalesce(sum(lluvia), 0), 1) AS lluvia, coalesce(sum(lluvia >= 0.2), 0) AS diasLluvia,
+         max(racha_max) AS racha, coalesce(sum(tmin < 0), 0) AS heladas, coalesce(sum(tmax >= 30), 0) AS calor, sum(rayos) AS rayos,
+         round(avg(CASE WHEN viento_n > 0 THEN viento_suma * 1.0 / viento_n END), 1) AS vientoMedio,
+         round(avg(presion_max), 1) AS presionMax, round(avg(presion_min), 1) AS presionMin,
+         round(avg(hum_max)) AS humMax, round(avg(hum_min)) AS humMin
+       FROM resumen_diario WHERE estacion_id = ? GROUP BY mes ORDER BY mes`,
+    )
+    .bind(estacionId)
+    .all<ResumenMes>();
   return r.results;
 }
 

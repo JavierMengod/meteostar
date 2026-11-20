@@ -200,6 +200,36 @@ export interface RespuestaEstacion {
   importando: EstadoImportacion | null;
 }
 
+/** Resumen de un mes de una estación (calculado en la base de datos a partir de sus días). */
+export interface ResumenMes {
+  /** "aaaa-mm" */
+  mes: string;
+  /** Días con datos */
+  dias: number;
+  /** Media de las máximas y de las mínimas */
+  mediaMax: number | null;
+  mediaMin: number | null;
+  /** Temperatura media */
+  media: number | null;
+  /** Máxima y mínima absolutas del mes */
+  tmax: number | null;
+  tmin: number | null;
+  lluvia: number;
+  /** Días con 0,2 mm o más */
+  diasLluvia: number;
+  racha: number | null;
+  /** Días con mínima bajo 0 °C y con máxima de 30 °C o más */
+  heladas: number;
+  calor: number;
+  rayos: number | null;
+  vientoMedio: number | null;
+  /** Medias de las máximas y mínimas diarias de presión y humedad */
+  presionMax: number | null;
+  presionMin: number | null;
+  humMax: number | null;
+  humMin: number | null;
+}
+
 /** Cómo va la importación del histórico de una estación (cola común de importaciones). */
 export interface EstadoImportacion {
   /** Red de la que se trae (AEMET, Weather Underground, ecowitt.net) */

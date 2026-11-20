@@ -15,6 +15,7 @@ import {
   serieTemperatura,
   ultimaLectura,
   vientoDesde,
+  resumenMensual,
 } from "../db";
 import { leerEnvioConsola } from "../ecowitt";
 import { datosEstacion, estacionesPublicas, estacionPorSlug, estacionPorToken, type FilaEstacion } from "../estaciones";
@@ -145,11 +146,17 @@ app.get("/estaciones/:slug/historico", async (c) => {
 });
 
 /** Resumen de cada día: los últimos «dias» (hasta 20 años) o todos con dias=todo. */
+// Los días, como mucho de dos años (para más, el resumen mensual: con décadas de histórico serían megas)
 app.get("/estaciones/:slug/resumen", async (c) => {
-  const q = c.req.query("dias");
-  const dias = q === "todo" ? 7305 : Math.min(Math.max(Number(q) || 30, 1), 7305);
+  const dias = Math.min(Math.max(Number(c.req.query("dias")) || 30, 1), 731);
   c.header("Cache-Control", "public, max-age=300");
   return c.json(await resumenes(c.env.DB, c.get("estacion").id, fechaLocal(ahora() - (dias - 1) * 86400)));
+});
+
+/** Resumen de cada mes de todo el histórico (gráficas de «Todo» y tabla «Mes a mes»). */
+app.get("/estaciones/:slug/meses", async (c) => {
+  c.header("Cache-Control", "public, max-age=600");
+  return c.json(await resumenMensual(c.env.DB, c.get("estacion").id));
 });
 
 /** Extremos, medias y totales de un año (para elegir el año en «Extremos y récords»). */
