@@ -15,7 +15,7 @@
       "binding": "DB",
       "database_name": "meteostar",
       // Se rellena al crear la base de datos con: npx wrangler d1 create meteostar
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "9e4c64e8-e9b9-4e43-9c08-b62fb2e5e601",
       "migrations_dir": "migrations"
     }
   ],
@@ -24,7 +24,7 @@
     {
       "binding": "IMAGENES",
       // Se rellena al crearlo con: npx wrangler kv namespace create IMAGENES
-      "id": "00000000000000000000000000000000"
+      "id": "aa0a37a900eb4343b9f736d92c0cb594"
     }
   ],
   // Datos de la red que se muestran en la portada (la previsión principal es la de este punto)
