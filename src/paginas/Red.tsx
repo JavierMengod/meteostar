@@ -10,6 +10,7 @@ import TarjetaEstacion from "../componentes/TarjetaEstacion";
 import { usePeticion } from "../datos";
 import { enDirecto as estaEnDirecto } from "../estaciones";
 import { capital, diaSemana, fechaCorta, hora, n } from "../formato";
+import { useSeguidos } from "../seguidos";
 import { descripcion, textoDia } from "../prevision";
 
 const Mapa = lazy(() => import("../componentes/Mapa"));
@@ -19,11 +20,10 @@ const maximo = (v: number[]) => (v.length ? Math.max(...v) : null);
 
 export default function Red({ red, prevision }: { red: RespuestaRed | null; prevision: RespuestaPrevision | null }) {
   const { datos: series } = usePeticion<SeriesRed>("/api/red/temperaturas?horas=24", 5 * 60_000);
+  // En portada, las estaciones destacadas: las que sigue el usuario o, si no ha elegido, las de por defecto
+  const seg = useSeguidos("estacion", red?.porDefecto ?? []);
   if (!red) return <Cargando />;
   const { ahora } = red;
-  const particulares = red.estaciones.filter((d) => d.estacion.tipo === "particular");
-  const oficiales = red.estaciones.filter((d) => d.estacion.tipo === "oficial");
-  const externas = red.estaciones.filter((d) => d.estacion.tipo === "externa");
   const enDirecto = red.estaciones.filter((d) => estaEnDirecto(d, ahora));
   // Las medias de la cabecera, solo con las estaciones de la red (las oficiales son horarias y van aparte)
   const deLaRed = enDirecto.filter((d) => d.estacion.tipo === "particular");
@@ -34,6 +34,10 @@ export default function Red({ red, prevision }: { red: RespuestaRed | null; prev
   const extremosHoy = red.estaciones.flatMap((d) => [d.hoy?.tmin, d.hoy?.tmax, d.actual?.temp]).filter((v): v is number => typeof v === "number");
   const escala: [number, number] | undefined = extremosHoy.length ? [Math.min(...extremosHoy) - 2, Math.max(...extremosHoy) + 2] : undefined;
   const nombres = Object.fromEntries(red.estaciones.map((d) => [d.estacion.slug, d.estacion.nombre]));
+  // Las destacadas, en el orden elegido (si no hay ninguna marcada, todas: una red recién creada)
+  const destacadas = seg.destacados.length
+    ? seg.destacados.map((slug) => red.estaciones.find((d) => d.estacion.slug === slug)).filter((d): d is (typeof red.estaciones)[number] => !!d)
+    : red.estaciones;
 
   return (
     <>
@@ -80,38 +84,24 @@ export default function Red({ red, prevision }: { red: RespuestaRed | null; prev
         }
       />
 
-      {particulares.length > 0 && (
-        <>
-          <CabeceraSeccion titulo="Estaciones" nota="Pulsa una estación para ver todos sus datos" />
-          <div className="rejilla-3">
-            {particulares.map((d) => (
-              <TarjetaEstacion key={d.estacion.id} d={d} escala={escala} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {externas.length > 0 && (
-        <>
-          <CabeceraSeccion titulo={particulares.length ? "Otras redes" : "Estaciones"} nota={<a href="/estaciones">Ver todas las estaciones de la zona ›</a>} />
-          <div className="rejilla-3">
-            {externas.map((d) => (
-              <TarjetaEstacion key={d.estacion.id} d={d} escala={escala} />
-            ))}
-          </div>
-        </>
-      )}
-      {!particulares.length && !externas.length && <p className="vacio">Todavía no hay estaciones. <a href="/estaciones">Ver las de la zona ›</a></p>}
-
-      {oficiales.length > 0 && (
-        <>
-          <CabeceraSeccion titulo="Estaciones oficiales" nota="Redes públicas de la zona" />
-          <div className="rejilla-3">
-            {oficiales.map((d) => (
-              <TarjetaEstacion key={d.estacion.id} d={d} escala={escala} />
-            ))}
-          </div>
-        </>
+      <CabeceraSeccion
+        titulo={seg.sonPropios ? "Tus estaciones" : "Estaciones"}
+        nota={
+          <a href="/estaciones">
+            {red.estaciones.length > destacadas.length ? `Ver las ${red.estaciones.length} estaciones de la red ›` : "Todas las estaciones de la zona ›"}
+          </a>
+        }
+      />
+      {destacadas.length ? (
+        <div className="rejilla-3">
+          {destacadas.map((d) => (
+            <TarjetaEstacion key={d.estacion.id} d={d} escala={escala} />
+          ))}
+        </div>
+      ) : (
+        <p className="vacio">
+          Todavía no hay estaciones. <a href="/estaciones">Ver las de la zona ›</a>
+        </p>
       )}
 
       <CabeceraSeccion titulo="Mapa de estaciones" nota="Pulsa una estación para ver todos sus datos" />

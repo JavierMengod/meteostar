@@ -55,7 +55,7 @@ export default function Pie({ red, usuario }: { red: RespuestaRed | null; usuari
       </div>
       <div className="pie-base">
         <span>© {new Date().getFullYear()} Meteostar</span>
-        <span>Datos orientativos, sin valor oficial</span>
+        <span>Hecho por Javier Mengod</span>
       </div>
     </footer>
   );
