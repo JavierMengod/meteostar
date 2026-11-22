@@ -12,7 +12,11 @@ export function usePeticion<T>(url: string | null, intervalo = 60_000) {
     if (!url) return;
     try {
       const r = await fetch(url, fresco ? { cache: "reload" } : undefined);
-      if (!r.ok) throw new Error(r.status === 404 ? "no encontrado" : `HTTP ${r.status}`);
+      if (!r.ok) {
+        // El servidor explica algunos errores (p. ej. el límite diario de consultas)
+        const explicacion = r.status === 503 ? ((await r.json().catch(() => null)) as { error?: string } | null)?.error : null;
+        throw new Error(r.status === 404 ? "no encontrado" : (explicacion ?? `HTTP ${r.status}`));
+      }
       setDatos(await r.json());
       setError(null);
     } catch (e) {

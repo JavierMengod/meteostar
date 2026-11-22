@@ -22,6 +22,10 @@ app.route("/api", cuenta);
 app.notFound((c) => c.json({ error: "no encontrado" }, 404));
 app.onError((e, c) => {
   console.error(e);
+  // Límite diario del plan gratuito de la base de datos: se dice claro (vuelve sola a medianoche UTC)
+  if (/daily row (read|write) limit|exceeded D1/i.test(String(e))) {
+    return c.json({ error: "La web ha llegado a su límite diario de consultas. Vuelve a funcionar a las 00:00 UTC (la 1:00 o las 2:00 en España)." }, 503);
+  }
   return c.json({ error: "Error interno" }, 500);
 });
 

@@ -109,5 +109,5 @@ export function Dato({ etiqueta, valor, unidad, decimales = 1, clase }: { etique
 }
 
 export function Cargando({ error }: { error?: string | null }) {
-  return <div className="cargando">{error ? `No se pudieron cargar los datos (${error}).` : "Cargando…"}</div>;
+  return <div className="cargando">{error ? (/^HTTP /.test(error) ? `No se pudieron cargar los datos (${error}).` : error) : "Cargando…"}</div>;
 }
