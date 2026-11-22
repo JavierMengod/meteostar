@@ -79,3 +79,18 @@ minutos por estación). Para respetar el límite de D1 gratuito (100.000 filas e
 (`--max-filas`): lo que quede lo sigue la cola, o se vuelve a ejecutar al día siguiente. Weather Underground da un día
 por consulta y la clave unas 1.500 al día (compartidas con la web): como mucho 800 por ejecución (`--max-wu`).
 ecowitt.net no va en el script (sus claves están cifradas en la base de datos): lo trae la cola.
+
+# Máximas y mínimas de Villastar corregidas con Weather Underground (27/4 – 5/9/2026)
+
+`extremos-villastar.sql`: de lo que ecowitt.net guarda de hace más de 3 meses solo hay un dato cada 30 minutos, así que
+las máximas y mínimas importadas de abril a agosto de 2026 salían suavizadas (comparadas con la hoja de cálculo de la
+estación, unas décimas: la máxima más baja y la mínima más alta). Generado con `scripts/corregir-extremos-wu.mjs` a
+partir de las observaciones cada 5 minutos de la misma estación en Weather Underground (IVILLA1897): solo cambia un
+extremo si el de Weather Underground es más extremo (con su hora), y rehace la media del 27/4 (primer día, incompleto).
+Tras cargarlo, las máximas y mínimas coinciden con la hoja salvo en días en los que la hoja cuenta el día en hora de
+Londres (la de la consola) en lugar de la española.
+
+```
+npx wrangler d1 execute meteostar --remote --file datos/extremos-villastar.sql
+npx wrangler d1 execute meteostar --remote --command "DELETE FROM cache WHERE clave LIKE 'extremos%' OR clave LIKE 'meses/%'"
+```
