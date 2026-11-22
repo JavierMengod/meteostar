@@ -1,7 +1,8 @@
 // Acceso a la base de datos D1. Todas las lecturas y resúmenes son por estación.
 import type { Extremo, Extremos, Lectura, PuntoHistorico, ResumenDiario, VientoMinuto, ResumenMes } from "../shared/tipos";
 import type { ExtremosDia } from "./conectores";
-import { fechaLocal } from "./fechas";
+import { fechaLocal, fechaAnterior } from "./fechas";
+import { enCache } from "./cache";
 
 const COLUMNAS = [
   "ts", "fuente", "temp", "hum", "rocio", "sensacion", "presion", "presion_abs", "viento", "racha",
@@ -284,6 +285,76 @@ const EXTREMOS: [keyof Extremos, keyof ResumenDiario, "DESC" | "ASC", keyof Resu
   ["radiacion_max", "radiacion_max", "DESC", null],
   ["uv_max", "uv_max", "DESC", null],
 ];
+
+/**
+ * Extremos de un periodo que acaba hoy, sin recorrer todo el histórico en cada visita: lo de hasta ayer no cambia en el
+ * día y se guarda en la caché (se calcula una vez al día por estación y periodo); se le suma el día de hoy.
+ */
+export async function extremosHastaHoy(
+  db: D1Database,
+  estacionId: number,
+  desde: string,
+  hoy: string,
+  rHoy: ResumenDiario | null,
+  ctx?: { waitUntil(p: Promise<unknown>): void },
+): Promise<Extremos> {
+  const ayer = fechaAnterior(hoy);
+  const pasado =
+    desde > ayer
+      ? vacios()
+      : await enCache(`extremos/${estacionId}/${desde}/${ayer}`, 26 * 3600, () => extremos(db, estacionId, desde, ayer), ctx);
+  if (!rHoy) return pasado;
+  const r: Extremos = { ...pasado };
+  // Cada extremo: el de hoy si lo supera (en empate, el más antiguo, como en la consulta)
+  for (const [clave, col, orden, colTs] of EXTREMOS) {
+    const v = rHoy[col] as number | null;
+    if (v === null || v === undefined) continue;
+    const antes = pasado[clave] as Extremo | null;
+    if (!antes || (orden === "DESC" ? v > antes.valor : v < antes.valor)) {
+      (r as any)[clave] = { valor: v, fecha: hoy, ts: colTs ? ((rHoy[colTs] as number | null) ?? null) : null } satisfies Extremo;
+    }
+  }
+  // Medias y totales con el día de hoy
+  const media = (m: number | null, n: number, v: number | null) =>
+    v === null ? m : m === null ? v : Math.round(((m * n + v) / (n + 1)) * 10) / 10;
+  const conTmax = rHoy.tmax !== null;
+  r.media_tmax = media(pasado.media_tmax, pasado.dias, rHoy.tmax);
+  r.media_tmin = media(pasado.media_tmin, pasado.dias, rHoy.tmin);
+  r.lluvia_total = rHoy.lluvia === null ? pasado.lluvia_total : Math.round(((pasado.lluvia_total ?? 0) + rHoy.lluvia) * 10) / 10;
+  r.dias_lluvia = pasado.dias_lluvia + ((rHoy.lluvia ?? 0) >= 0.2 ? 1 : 0);
+  r.dias = pasado.dias + (conTmax || rHoy.lluvia !== null ? 1 : 0);
+  // Mes más lluvioso: el mes en curso, con lo de hoy, puede pasar a serlo
+  const mes = hoy.slice(0, 7);
+  const lluviaMes = await db
+    .prepare("SELECT round(sum(lluvia), 1) AS v FROM resumen_diario WHERE estacion_id = ? AND fecha BETWEEN ? AND ?")
+    .bind(estacionId, desde > `${mes}-01` ? desde : `${mes}-01`, hoy)
+    .first<number | null>("v");
+  const mejor = pasado.mes_mas_lluvioso;
+  if (lluviaMes && lluviaMes > 0 && (!mejor || mejor.mes === mes || lluviaMes > mejor.valor)) {
+    r.mes_mas_lluvioso = mejor && mejor.mes !== mes && mejor.valor >= lluviaMes ? mejor : { mes, valor: lluviaMes };
+  }
+  return r;
+}
+
+const vacios = (): Extremos => ({
+  tmax: null,
+  tmin: null,
+  hum_min: null,
+  viento_max: null,
+  racha_max: null,
+  presion_max: null,
+  presion_min: null,
+  lluvia_dia_max: null,
+  intensidad_max: null,
+  radiacion_max: null,
+  uv_max: null,
+  media_tmax: null,
+  media_tmin: null,
+  lluvia_total: null,
+  dias_lluvia: 0,
+  dias: 0,
+  mes_mas_lluvioso: null,
+});
 
 /** Extremos, medias y totales entre dos fechas (incluidas), a partir del resumen diario. */
 export async function extremos(db: D1Database, estacionId: number, desde: string, hasta: string): Promise<Extremos> {

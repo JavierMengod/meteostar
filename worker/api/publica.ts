@@ -16,6 +16,7 @@ import {
   ultimaLectura,
   vientoDesde,
   resumenMensual,
+  extremosHastaHoy,
 } from "../db";
 import { leerEnvioConsola } from "../ecowitt";
 import { datosEstacion, estacionesPublicas, estacionPorSlug, estacionPorToken, type FilaEstacion } from "../estaciones";
@@ -30,6 +31,7 @@ import { anioAforo, previsionAforo, resumenAforo } from "../historico-aforos";
 import { radar, teselaRadar } from "../radar";
 import { CAPAS_SATELITE, imagenSatelite, PASOS, satelite, type CapaSatelite } from "../seguimiento";
 import { estadoImportacion } from "../importaciones";
+import { enCache } from "../cache";
 
 export const ahora = () => Math.floor(Date.now() / 1000);
 
@@ -142,7 +144,10 @@ app.get("/estaciones/:slug/datos", async (c) => {
 app.get("/estaciones/:slug/historico", async (c) => {
   const horas = Math.min(Math.max(Number(c.req.query("horas")) || 24, 1), DIAS_LECTURAS * 24);
   c.header("Cache-Control", "no-cache");
-  return c.json(await historico(c.env.DB, c.get("estacion").id, ahora() - horas * 3600));
+  // Un minuto en la caché compartida: quien mire la misma estación a la vez no repite la consulta
+  const id = c.get("estacion").id;
+  const minuto = Math.floor(ahora() / 60);
+  return c.json(await enCache(`historico/${id}/${horas}/${minuto}`, 90, () => historico(c.env.DB, id, (minuto + 1) * 60 - horas * 3600), c.executionCtx));
 });
 
 /** Resumen de cada día: los últimos «dias» (hasta 20 años) o todos con dias=todo. */
@@ -150,21 +155,28 @@ app.get("/estaciones/:slug/historico", async (c) => {
 app.get("/estaciones/:slug/resumen", async (c) => {
   const dias = Math.min(Math.max(Number(c.req.query("dias")) || 30, 1), 731);
   c.header("Cache-Control", "public, max-age=300");
-  return c.json(await resumenes(c.env.DB, c.get("estacion").id, fechaLocal(ahora() - (dias - 1) * 86400)));
+  const id = c.get("estacion").id;
+  const desde = fechaLocal(ahora() - (dias - 1) * 86400);
+  const cuarto = Math.floor(ahora() / 300);
+  return c.json(await enCache(`resumen/${id}/${desde}/${cuarto}`, 360, () => resumenes(c.env.DB, id, desde), c.executionCtx));
 });
 
 /** Resumen de cada mes de todo el histórico (gráficas de «Todo» y tabla «Mes a mes»). */
 app.get("/estaciones/:slug/meses", async (c) => {
-  c.header("Cache-Control", "public, max-age=600");
-  return c.json(await resumenMensual(c.env.DB, c.get("estacion").id));
+  c.header("Cache-Control", "public, max-age=1800");
+  const id = c.get("estacion").id;
+  return c.json(await enCache(`meses/${id}/${Math.floor(ahora() / 1800)}`, 1900, () => resumenMensual(c.env.DB, id), c.executionCtx));
 });
 
 /** Extremos, medias y totales de un año (para elegir el año en «Extremos y récords»). */
 app.get("/estaciones/:slug/extremos", async (c) => {
   const anio = Number(c.req.query("anio"));
   if (!Number.isInteger(anio) || anio < 1900 || anio > 2200) return c.json({ error: "año no válido" }, 400);
-  c.header("Cache-Control", "public, max-age=300");
-  return c.json(await extremos(c.env.DB, c.get("estacion").id, `${anio}-01-01`, `${anio}-12-31`));
+  c.header("Cache-Control", "public, max-age=3600");
+  const id = c.get("estacion").id;
+  // Los años pasados ya no cambian: un día en la caché compartida
+  const r = await enCache(`extremos-anio/${id}/${anio}/${fechaLocal(ahora())}`, 26 * 3600, () => extremos(c.env.DB, id, `${anio}-01-01`, `${anio}-12-31`), c.executionCtx);
+  return c.json(r);
 });
 
 app.get("/estaciones/:slug/dia", async (c) => {
@@ -215,9 +227,9 @@ app.get("/estaciones/:slug/completo", async (c) => {
     lluviaEntre(db, id, `${anio}-01-01`, hoy),
     lluviaEntre(db, id, `${m >= 10 ? y : y - 1}-10-01`, hoy),
     lluviaEntre(db, id, `${m >= 9 ? y : y - 1}-09-01`, hoy),
-    extremos(db, id, `${mes}-01`, hoy),
-    extremos(db, id, `${anio}-01-01`, hoy),
-    extremos(db, id, "0000-01-01", hoy),
+    extremosHastaHoy(db, id, `${mes}-01`, hoy, rHoy, c.executionCtx),
+    extremosHastaHoy(db, id, `${anio}-01-01`, hoy, rHoy, c.executionCtx),
+    extremosHastaHoy(db, id, "0000-01-01", hoy, rHoy, c.executionCtx),
   ]);
   const imp = await estadoImportacion(db, id);
   const respuesta: RespuestaEstacion = {

@@ -155,13 +155,14 @@ interface Props {
 export default function Estacion({ slug, prevision }: Props) {
   const base = `/api/estaciones/${encodeURIComponent(slug)}`;
   const { datos: info, error: errorInfo } = usePeticion<RespuestaDatos>(`${base}/datos`, 0);
-  const { datos: e, error } = usePeticion<RespuestaEstacion>(`${base}/completo`);
+  // El dato actual, cada minuto (en «datos»); lo demás cambia despacio: cada 5 minutos, o una vez
+  const { datos: e, error } = usePeticion<RespuestaEstacion>(`${base}/completo`, 5 * 60_000);
   const [horas, setHoras] = useState(24);
-  const { datos: lecturas } = usePeticion<PuntoHistorico[]>(`${base}/historico?horas=${horas === 24 ? 48 : horas}`);
+  const { datos: lecturas } = usePeticion<PuntoHistorico[]>(`${base}/historico?horas=${horas === 24 ? 48 : horas}`, 5 * 60_000);
   const [periodoDias, setPeriodoDias] = useState(92);
   // Días del último año (gráficas de 30 días, 3 meses y año) y resumen de cada mes de todo el histórico
-  const { datos: diasAnio } = usePeticion<ResumenDiario[]>(`${base}/resumen?dias=366`);
-  const { datos: meses } = usePeticion<ResumenMes[]>(`${base}/meses`);
+  const { datos: diasAnio } = usePeticion<ResumenDiario[]>(`${base}/resumen?dias=366`, 30 * 60_000);
+  const { datos: meses } = usePeticion<ResumenMes[]>(`${base}/meses`, 0);
   // Día de «Consultar un día» (también se elige pulsando un día en las gráficas diarias)
   const [diaConsulta, setDiaConsulta] = useState<string | null>(null);
   const corte = e ? e.ahora - horas * 3600 : 0;
@@ -177,7 +178,7 @@ export default function Estacion({ slug, prevision }: Props) {
     return prepararDias(diasAnio.filter((d) => d.fecha >= desde));
   }, [diasAnio, meses, porMeses, periodoDias, e]);
   const cada = porMeses ? "cada mes" : "cada día";
-  const { datos: h24 } = usePeticion<PuntoHistorico[]>(`${base}/historico?horas=24`);
+  const { datos: h24 } = usePeticion<PuntoHistorico[]>(`${base}/historico?horas=24`, 5 * 60_000);
 
   if (errorInfo === "no encontrado") return <p className="vacio">Esta estación no existe. <a href="/">Volver a la portada</a></p>;
   if (!e || !info) return <Cargando error={error} />;
