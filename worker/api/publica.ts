@@ -31,7 +31,7 @@ import { anioAforo, previsionAforo, resumenAforo } from "../historico-aforos";
 import { radar, teselaRadar } from "../radar";
 import { CAPAS_SATELITE, imagenSatelite, PASOS, satelite, type CapaSatelite } from "../seguimiento";
 import { estadoImportacion } from "../importaciones";
-import { enCache } from "../cache";
+import { enCache, enCacheD1 } from "../cache";
 
 export const ahora = () => Math.floor(Date.now() / 1000);
 
@@ -165,7 +165,8 @@ app.get("/estaciones/:slug/resumen", async (c) => {
 app.get("/estaciones/:slug/meses", async (c) => {
   c.header("Cache-Control", "public, max-age=1800");
   const id = c.get("estacion").id;
-  return c.json(await enCache(`meses/${id}/${Math.floor(ahora() / 1800)}`, 1900, () => resumenMensual(c.env.DB, id), c.executionCtx));
+  // Cambia como mucho un poco cada día: una hora guardado en la base de datos (leerlo cuesta 1 fila)
+  return c.json(await enCacheD1(c.env.DB, `meses/${id}/${Math.floor(ahora() / 3600)}`, 3700, () => resumenMensual(c.env.DB, id)));
 });
 
 /** Extremos, medias y totales de un año (para elegir el año en «Extremos y récords»). */
@@ -175,7 +176,7 @@ app.get("/estaciones/:slug/extremos", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   const id = c.get("estacion").id;
   // Los años pasados ya no cambian: un día en la caché compartida
-  const r = await enCache(`extremos-anio/${id}/${anio}/${fechaLocal(ahora())}`, 26 * 3600, () => extremos(c.env.DB, id, `${anio}-01-01`, `${anio}-12-31`), c.executionCtx);
+  const r = await enCacheD1(c.env.DB, `extremos-anio/${id}/${anio}/${fechaLocal(ahora())}`, 26 * 3600, () => extremos(c.env.DB, id, `${anio}-01-01`, `${anio}-12-31`));
   return c.json(r);
 });
 
@@ -227,9 +228,9 @@ app.get("/estaciones/:slug/completo", async (c) => {
     lluviaEntre(db, id, `${anio}-01-01`, hoy),
     lluviaEntre(db, id, `${m >= 10 ? y : y - 1}-10-01`, hoy),
     lluviaEntre(db, id, `${m >= 9 ? y : y - 1}-09-01`, hoy),
-    extremosHastaHoy(db, id, `${mes}-01`, hoy, rHoy, c.executionCtx),
-    extremosHastaHoy(db, id, `${anio}-01-01`, hoy, rHoy, c.executionCtx),
-    extremosHastaHoy(db, id, "0000-01-01", hoy, rHoy, c.executionCtx),
+    extremosHastaHoy(db, id, `${mes}-01`, hoy, rHoy),
+    extremosHastaHoy(db, id, `${anio}-01-01`, hoy, rHoy),
+    extremosHastaHoy(db, id, "0000-01-01", hoy, rHoy),
   ]);
   const imp = await estadoImportacion(db, id);
   const respuesta: RespuestaEstacion = {

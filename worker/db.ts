@@ -2,7 +2,7 @@
 import type { Extremo, Extremos, Lectura, PuntoHistorico, ResumenDiario, VientoMinuto, ResumenMes } from "../shared/tipos";
 import type { ExtremosDia } from "./conectores";
 import { fechaLocal, fechaAnterior } from "./fechas";
-import { enCache } from "./cache";
+import { enCacheD1 } from "./cache";
 
 const COLUMNAS = [
   "ts", "fuente", "temp", "hum", "rocio", "sensacion", "presion", "presion_abs", "viento", "racha",
@@ -296,13 +296,12 @@ export async function extremosHastaHoy(
   desde: string,
   hoy: string,
   rHoy: ResumenDiario | null,
-  ctx?: { waitUntil(p: Promise<unknown>): void },
 ): Promise<Extremos> {
   const ayer = fechaAnterior(hoy);
   const pasado =
     desde > ayer
       ? vacios()
-      : await enCache(`extremos/${estacionId}/${desde}/${ayer}`, 26 * 3600, () => extremos(db, estacionId, desde, ayer), ctx);
+      : await enCacheD1(db, `extremos/${estacionId}/${desde}/${ayer}`, 26 * 3600, () => extremos(db, estacionId, desde, ayer));
   if (!rHoy) return pasado;
   const r: Extremos = { ...pasado };
   // Cada extremo: el de hoy si lo supera (en empate, el más antiguo, como en la consulta)

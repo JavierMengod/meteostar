@@ -18,3 +18,29 @@ export async function enCache<T>(clave: string, segundos: number, calcular: () =
   else await guardar;
   return valor;
 }
+
+/**
+ * Como enCache, pero guardado en la base de datos (tabla «cache»): para lo que vale horas o un día. Funciona en
+ * cualquier dirección (la caché de Cloudflare puede no guardar nada en las *.workers.dev) y leerlo cuesta 1 fila.
+ */
+export async function enCacheD1<T>(db: D1Database, clave: string, segundos: number, calcular: () => Promise<T>): Promise<T> {
+  // Si la tabla aún no existe (migración pendiente), se calcula sin guardar
+  const guardado = await db
+    .prepare("SELECT valor FROM cache WHERE clave = ? AND caduca > unixepoch()")
+    .bind(clave)
+    .first<string>("valor")
+    .catch((e: unknown) => (/no such table/i.test(String(e)) ? null : Promise.reject(e)));
+  if (guardado) return JSON.parse(guardado) as T;
+  const valor = await calcular();
+  await db
+    .prepare("INSERT INTO cache (clave, valor, caduca) VALUES (?, ?, unixepoch() + ?) ON CONFLICT (clave) DO UPDATE SET valor = excluded.valor, caduca = excluded.caduca")
+    .bind(clave, JSON.stringify(valor), segundos)
+    .run()
+    .catch((e: unknown) => (/no such table/i.test(String(e)) ? null : Promise.reject(e)));
+  return valor;
+}
+
+/** Borra lo caducado (una vez al día, con la limpieza). */
+export async function limpiarCache(db: D1Database) {
+  await db.prepare("DELETE FROM cache WHERE caduca < unixepoch()").run();
+}

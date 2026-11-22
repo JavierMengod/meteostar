@@ -24,8 +24,24 @@ export function usePeticion<T>(url: string | null, intervalo = 60_000) {
     setDatos(null);
     cargar();
     if (!intervalo) return;
-    const id = setInterval(() => cargar(), intervalo);
-    return () => clearInterval(id);
+    // Con la pestaña oculta (o la app instalada en segundo plano) no se pide nada: nadie lo está mirando
+    let ultima = Date.now();
+    const pedir = () => {
+      ultima = Date.now();
+      cargar();
+    };
+    const id = setInterval(() => {
+      if (!document.hidden) pedir();
+    }, intervalo);
+    // Al volver a la pestaña, si ya tocaba, se pone al día enseguida
+    const alVolver = () => {
+      if (!document.hidden && Date.now() - ultima >= intervalo) pedir();
+    };
+    document.addEventListener("visibilitychange", alVolver);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", alVolver);
+    };
   }, [cargar, intervalo]);
 
   return { datos, error, recargar: () => cargar(true) };

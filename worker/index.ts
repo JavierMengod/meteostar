@@ -13,6 +13,7 @@ import { completarRecientesAemet, refrescarAemet } from "./aemet";
 import { actualizarHistorico, refrescarResumenes } from "./historico-aforos";
 import { archivarRadar } from "./radar";
 import { actualizarSatelite } from "./seguimiento";
+import { limpiarCache } from "./cache";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -75,6 +76,6 @@ export default {
     }
     // Cada minuto: estaciones que se leen por API
     await leerEstaciones(env, t);
-    if (new Date(controller.scheduledTime).getUTCMinutes() === 0) ctx.waitUntil(borrarAntiguas(env.DB, t));
+    if (new Date(controller.scheduledTime).getUTCMinutes() === 0) ctx.waitUntil(borrarAntiguas(env.DB, t).then(() => limpiarCache(env.DB)));
   },
 } satisfies ExportedHandler<Env>;
